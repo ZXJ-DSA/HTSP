@@ -7,7 +7,7 @@ The implementation code includes the index construction, query processing, and i
 
 
 ## Data
-The datasets of this paper are sourced from [The 9th DIMACS Implementation Challenge - Shortest Paths](http://users.diag.uniroma1.it/challenge9/download.shtml)]. 
+The datasets of this paper are sourced from [The 9th DIMACS Implementation Challenge - Shortest Paths](http://users.diag.uniroma1.it/challenge9/download.shtml). 
 
 An example graph *NY* is provided in the directory *NY* for your reference. You can run our algorithms on the example graph by using the source path `./`. 
 
