@@ -1,5 +1,5 @@
 # HTSP
-The implementation code of paper "High Throughput Shortest Path Query Processing for Dynamic Road Networks" (submitted to VLDB24). Please refer to the paper for the algorithm details.
+The implementation code of paper "High Throughput Shortest Path Query Processing for Large Dynamic Road Networks" (submitted to SIGMOD25). Please refer to the paper for the algorithm details.
 
 ## Algorithms
 
