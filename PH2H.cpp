@@ -28,18 +28,18 @@ void Graph::IndexConstruction(){
         PostMHLIndexConstruct();
     }else if(algoChoice==0){
         cout<<"A* search."<<endl;
-        ReadGraph(graphfile);//
+        ReadGraph(sourcePath+dataset);//
     }
 }
 //function of hybrid multi-stage SP index construction
 void Graph::HybridSPIndexConstruct(){
-    string orderfile=graphfile+".order";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
+    string orderfile=sourcePath+dataset+".order";
+    orderfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
 
     double runT1=0, runT2=0, runT3=0;
     Timer tt;
 
-    ReadGraph(graphfile);//
+    ReadGraph(sourcePath+dataset);//
 
     tt.start();
     MDEContraction(orderfile);
@@ -512,13 +512,11 @@ void Graph::PMHLIndexConstruct() {
     runT1=0, runT2=0, runT3=0, runT4=0, runT5=0;
 
     /// Read order and partitions
-    string orderfile=graphfile+".orderP";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_order";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
+    string orderfile;
+    orderfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
     ReadOrder(orderfile);
 
-    string partitionfile=graphfile+"_"+algoParti+"_"+to_string(partiNum);
+    string partitionfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum);
     GraphPartitionRead(partitionfile);//read partitions
 
 //    vSm.reserve(node_num);
@@ -538,10 +536,6 @@ void Graph::PMHLIndexConstruct() {
     runT1 = tt.GetRuntime();
     cout<<"Partition index construction time: "<<runT1<<" s"<<endl;
 
-
-//    g.WriteOrder(graphfile+".order");
-//    WriteCoreGraph(graphfile+"C");
-//    exit(0);
     /// Overlay graph construction
     tt.start();
     Construct_OverlayGraphNoAllPair(true);
@@ -551,10 +545,7 @@ void Graph::PMHLIndexConstruct() {
 
     /// Overlay index construction
     tt.start();
-//    Construct_core(algoCoreC);
-//    WriteCoreIndex(graphfile);
     Construct_OverlayIndex(true);
-
     tt.stop();
     runT3 = tt.GetRuntime();
     cout<<"Overlay index construction time: "<<runT3<<" s."<< endl;
@@ -602,13 +593,11 @@ void Graph::PMHLIndexConstructOpt() {
     runT0=0, runT1=0, runT2=0, runT3=0, runT4=0, runT5=0;
 
     /// Read order and partitions
-    string orderfile=graphfile+".orderP";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_order";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
+    string orderfile;
+    orderfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
     ReadOrder(orderfile);
 
-    string partitionfile=graphfile+"_"+algoParti+"_"+to_string(partiNum);
+    string partitionfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum);
     GraphPartitionRead(partitionfile);//read partitions
 
 //    vSm.reserve(node_num);
@@ -632,10 +621,6 @@ void Graph::PMHLIndexConstructOpt() {
     runT1 = tt.GetRuntime();
     cout<<"Partition shortcuts construction time: "<<runT1<<" s"<<endl;
 
-
-//    g.WriteOrder(graphfile+".order");
-//    WriteCoreGraph(graphfile+"C");
-//    exit(0);
     /// Overlay graph construction
     tt.start();
     Construct_OverlayGraphNoAllPair(true);
@@ -645,10 +630,7 @@ void Graph::PMHLIndexConstructOpt() {
 
     /// Overlay index construction
     tt.start();
-//    Construct_core(algoCoreC);
-//    WriteCoreIndex(graphfile);
     Construct_OverlayIndex(true);
-
     tt.stop();
     runT3 = tt.GetRuntime();
     cout<<"Overlay shortcuts construction time: "<<runT3<<" s."<< endl;
@@ -690,11 +672,8 @@ void Graph::PMHLIndexConstructOpt() {
 void Graph::PostMHLIndexConstruct() {
     double runT0, runT1, runT2, runT3, runT4, runT5;
     runT0=0, runT1=0, runT2=0, runT3=0, runT4=0, runT5=0;
-
-
     Timer tt;
-
-    ReadGraph(graphfile);//
+    ReadGraph(sourcePath+dataset);//
 
     vSm.reserve(node_num);
     for(int i = 0; i < node_num; i++)
@@ -715,16 +694,19 @@ void Graph::PostMHLIndexConstruct() {
     tt.stop();
     runT1 = tt.GetRuntime();
     cout<<"Tree-Decomposition based Partitioning time: "<<runT1<<" s"<<endl;
+    // write the partition results to disk
+    string partiF = sourcePath + "tmp/"+dataset+".PostMHL_"+to_string(bandWidth)+".partiInfo";
+    ifstream IF(partiF);
+    if(!IF){//if the label file does not exist, construct it
+        WritePostMHLPartiResult(sourcePath + "tmp/"+dataset+".PostMHL_"+to_string(bandWidth)+".partiInfo");
+    }
+    IF.close();
+
     algoQuery=PCH_No;
 
-//    g.WriteOrder(graphfile+".order");
-//    WriteCoreGraph(graphfile+"C");
-//    exit(0);
 
     /// Overlay index construction
     tt.start();
-//    Construct_core(algoCoreC);
-//    WriteCoreIndex(graphfile);
     PostMHLIndexConstructOverlay();
     tt.stop();
     runT3 = tt.GetRuntime();
@@ -767,13 +749,11 @@ void Graph::HybridPSPIndexConstruct(){
     runT1=0, runT2=0, runT3=0, runT4=0, runT5=0;
 
     /// Read order and partitions
-    string orderfile=graphfile+".orderP";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_order";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
+    string orderfile;
+    orderfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
     ReadOrder(orderfile);
 
-    string partitionfile=graphfile+"_"+algoParti+"_"+to_string(partiNum);
+    string partitionfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum);
     GraphPartitionRead(partitionfile);//read partitions
 
 //    vSm.reserve(node_num);
@@ -792,9 +772,6 @@ void Graph::HybridPSPIndexConstruct(){
     cout<<"Partition index construction time: "<<runT1<<" s"<<endl;
 
 
-//    g.WriteOrder(graphfile+".order");
-//    WriteCoreGraph(graphfile+"C");
-//    exit(0);
     /// Overlay graph construction
     tt.start();
     Construct_OverlayGraph(true);
@@ -852,13 +829,11 @@ void Graph::PH2HIndexConstruct(){
     runT1=0, runT2=0, runT3=0, runT4=0, runT5=0;
 
     /// Read order and partitions
-    string orderfile=graphfile+".orderP";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_order";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
+    string orderfile;
+    orderfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
     ReadOrder(orderfile);
 
-    string partitionfile=graphfile+"_"+algoParti+"_"+to_string(partiNum);
+    string partitionfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum);
     GraphPartitionRead(partitionfile);//read partitions
 
 //    vSm.reserve(node_num);
@@ -877,9 +852,6 @@ void Graph::PH2HIndexConstruct(){
     cout<<"Partition index construction time: "<<runT1<<" s"<<endl;
 
 
-//    g.WriteOrder(graphfile+".order");
-//    WriteCoreGraph(graphfile+"C");
-//    exit(0);
     /// Overlay graph construction
     tt.start();
     Construct_OverlayGraph(true);
@@ -889,10 +861,7 @@ void Graph::PH2HIndexConstruct(){
 
     /// Overlay index construction
     tt.start();
-//    Construct_core(algoCoreC);
-//    WriteCoreIndex(graphfile);
     Construct_OverlayIndex(true);
-
     tt.stop();
     runT3 = tt.GetRuntime();
     cout<<"Overlay index construction time: "<<runT3<<" s."<< endl;
@@ -1059,7 +1028,7 @@ void Graph::IndexSizePostMHL(){
 }
 
 void Graph::PH2HVertexOrdering(int type){
-    ReadGraph(graphfile);
+    ReadGraph(sourcePath+dataset);
     int pNum=partiNum;
     switch (type) {
         case 0:{//MDE partition + distant MDE overlay
@@ -1094,7 +1063,7 @@ void Graph::PH2HVertexOrdering(int type){
     exit(0);
 }
 void Graph::OrderingAssemblyMDEBoundaryFirst(int pNum){
-    string filename=graphfile+"_"+algoParti+"_"+to_string(pNum)+"/vertex_orderMDE2";
+    string filename=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(pNum)+"/vertex_orderMDE2";
 
     ofstream OF(filename,ios::out);
     if(!OF.is_open()){
@@ -1167,7 +1136,7 @@ void Graph::OrderingAssemblyMDEBoundaryFirst(int pNum){
 }
 //function of MDE ordering assemblying
 void Graph::OrderingAssemblyMDE(int pNum){
-    string filename=graphfile+"_"+algoParti+"_"+to_string(pNum)+"/vertex_orderMDE";
+    string filename=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(pNum)+"/vertex_orderMDE";
 
     ofstream OF(filename,ios::out);
     if(!OF.is_open()){
@@ -1206,7 +1175,7 @@ void Graph::OrderingAssemblyMDE(int pNum){
 }
 //function of boundary-first assemblying
 void Graph::OrderingAssemblyBoundaryFirst(int pNum){
-    string orderfile=graphfile+"_"+algoParti+"_"+to_string(pNum)+"/vertex_order2";
+    string orderfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(pNum)+"/vertex_order2";
     set<int> vcheck;//use to check the redundant ordered vertex
     vcheck.clear();
     vNodeOrder.clear();
@@ -1354,7 +1323,7 @@ void Graph::SketchGraphBuild(){
 
     bool flag_minus = false;
 
-    string filename=graphfile+"_"+algoParti+"_"+to_string(partiNum);
+    string filename=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum);
     ifstream IF1(filename+"/subgraph_vertex");
     if(!IF1){
         cout<<"Cannot open file "<<"subgraph_vertex"<<endl;
@@ -2303,7 +2272,7 @@ void Graph::EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int in
     vector<int> results(runtimes,-1);
 
     if(algoChoice==1){
-        runT1=EffiMHLStage(ODpair,100,Dijk);
+        runT1=EffiMHLStage(ODpair,1000,Dijk);
         runT2=EffiMHLStage(ODpair,runtimes/10,CH);
         runT3=EffiMHLStage(ODpair,runtimes,H2H);
         //Stage 1: Dijkstra
@@ -2337,8 +2306,9 @@ void Graph::EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int in
         stageQueryT[Dijk]+=runT1;
         stageQueryT[CH]+=runT2;
         stageQueryT[H2H]+=runT3;
-    }else if(algoChoice==3){
-        runT1=EffiPMHLStage(ODpair,100,Dijk);
+    }
+    else if(algoChoice==3){
+        runT1=EffiPMHLStage(ODpair,1000,Dijk);
         runT2=EffiPMHLStage(ODpair,runtimes/10,PCH_No);
         runT3=EffiPMHLStage(ODpair,runtimes,PH2H_No);
         runT4=EffiPMHLStage(ODpair,runtimes,PH2H_Post);
@@ -2394,8 +2364,9 @@ void Graph::EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int in
         stageQueryT[PH2H_No]+=runT3;
         stageQueryT[PH2H_Post]+=runT4;
         stageQueryT[PH2H_Cross]+=runT5;
-    }else if(algoChoice==5){
-        runT1=EffiPostMHLStage(ODpair,100,Dijk);
+    }
+    else if(algoChoice==5){
+        runT1 = EffiPostMHLStage(ODpair,1000,Dijk);
         runT2 = EffiPostMHLStage(ODpair, runtimes / 10, PCH_No);
         runT4 = EffiPostMHLStage(ODpair, runtimes, PH2H_Post);
         runT5 = EffiPostMHLStage(ODpair, runtimes, PH2H_Cross);
@@ -2451,14 +2422,25 @@ double Graph::EffiMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int que
     int ID1, ID2, d1, d2;
     double runT=0;
     vector<int> results(runtimes,0);
-    tt.start();
+    bool ifDebug=false;
+    ifDebug=true;
+
     for(int i=0;i<runtimes;++i){
         ID1=ODpair[i].first, ID2=ODpair[i].second;
+        tt.start();
         d1=QueryNP(ID1,ID2);
         results[i]=d1;
+        tt.stop();
+        runT+=tt.GetRuntime();
+        if(ifDebug){
+            d2= Dijkstra(ID1,ID2,Neighbor);
+            if(d1!=d2){
+                cout<<"Wrong result! "<<ID1<<" "<<ID2<<" "<<d1<<" "<<d2<<endl; exit(1);
+            }
+        }
     }
-    tt.stop();
-    runT=tt.GetRuntime();
+
+
     cout<<"Efficiency Test of Stage "<<queryType<<" : "<<runT<<" s."<<endl;
     return runT/runtimes;
 }
@@ -2468,13 +2450,25 @@ double Graph::EffiPMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int qu
     Timer tt;
     int ID1, ID2, d1, d2;
     double runT=0;
-    tt.start();
+    vector<int> results(runtimes,0);
+    bool ifDebug=false;
+//    ifDebug=true;
+
     for(int i=0;i<runtimes;++i){
         ID1=ODpair[i].first, ID2=ODpair[i].second;
+        tt.start();
         d1=QueryPMHL(ID1,ID2);
+        results[i]=d1;
+        tt.stop();
+        runT+=tt.GetRuntime();
+        if(ifDebug){
+            d2= Dijkstra(ID1,ID2,Neighbor);
+            if(d1!=d2){
+                cout<<"Wrong result! "<<ID1<<" "<<ID2<<" "<<d1<<" "<<d2<<endl; exit(1);
+            }
+        }
     }
-    tt.stop();
-    runT=tt.GetRuntime();
+
     cout<<"Efficiency Test of Stage "<<queryType<<" : "<<runT<<" s."<<endl;
     return runT/runtimes;
 }
@@ -2484,13 +2478,25 @@ double Graph::EffiPostMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int
     Timer tt;
     int ID1, ID2, d1, d2;
     double runT=0;
-    tt.start();
+    vector<int> results(runtimes,0);
+    bool ifDebug=false;
+//    ifDebug=true;
+
     for(int i=0;i<runtimes;++i){
         ID1=ODpair[i].first, ID2=ODpair[i].second;
+        tt.start();
         d1=QueryPostMHL(ID1,ID2);
+        results[i]=d1;
+        tt.stop();
+        runT+=tt.GetRuntime();
+        if(ifDebug){
+            d2= Dijkstra(ID1,ID2,Neighbor);
+            if(d1!=d2){
+                cout<<"Wrong result! "<<ID1<<" "<<ID2<<" "<<d1<<" "<<d2<<endl; exit(1);
+            }
+        }
     }
-    tt.stop();
-    runT=tt.GetRuntime();
+
     cout<<"Efficiency Test of Stage "<<queryType<<" : "<<runT<<" s."<<endl;
     return runT/runtimes;
 }
@@ -2513,7 +2519,7 @@ void Graph::DFSTree(vector<int>& tNodes, int id){
 void Graph::SPThroughputTest(int updateType, bool ifBatch, int batchNum, int batchSize, int batchInterval, int runtimes) {
     cout<<"Shortest path query throughput test..."<<endl;
     // read updates
-    string file = graphfile + ".update";
+    string file = sourcePath+dataset + ".update";
     bool ifDebug=false;
 //    ifDebug=true;
     vector<pair<pair<int,int>,pair<int,int>>> wBatch;
@@ -2527,8 +2533,10 @@ void Graph::SPThroughputTest(int updateType, bool ifBatch, int batchNum, int bat
     }
     cout<<"Update batch: "<<batchNum<<" ; Batch size: "<<batchSize<<" ; Batch interval: "<< batchInterval<<endl;
 
-    string queryF = graphfile + ".query";
-//    filename = graphfile + ".queryParti";
+    string queryF = sourcePath+dataset + ".query";
+    if(samePartiPortion!=-1){
+        queryF=sourcePath + "tmp/"+dataset+".PostMHL_"+to_string(bandWidth)+".sameParti_"+to_string(samePartiPortion)+".query";
+    }
     ifstream IF(queryF);
     if(!IF){
         cout<<"Cannot open file "<<queryF<<endl;
@@ -4720,7 +4728,7 @@ unsigned long long Graph::EffiCheckThroughput(vector<pair<int,int>>& ODpair, Tim
 void Graph::IndexMaintenance(int updateType, int updateSize, bool ifBatch, int batchSize) {
     cout<<"Index update test..."<<endl;
     // read updates
-    string file = graphfile + ".update";
+    string file = sourcePath+dataset + ".update";
     bool ifDebug=false;
     ifDebug=true;
     vector<pair<pair<int,int>,pair<int,int>>> wBatch;

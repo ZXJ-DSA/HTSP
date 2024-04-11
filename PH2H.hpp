@@ -3373,12 +3373,12 @@ void Graph::TDPContract(){
 
     NodeOrder_ = NodeOrder;
 
-//    string orderF = graphfile + ".orderH2H" + to_string(bandWidth);
-//    ifstream IF(orderF);
-//    if(!IF){//if the label file does not exist, construct it
-//        WriteOrder(orderF);
-//    }
-//    IF.close();
+    string orderF = sourcePath + "tmp/"+dataset+".PostMHL_"+to_string(bandWidth)+".order";
+    ifstream IF(orderF);
+    if(!IF){//if the label file does not exist, construct it
+        WriteOrder(orderF);
+    }
+    IF.close();
 //    WriteOrder(graphfile+".order1");
 //    WriteOrder(graphfile+".order2");
 //    CompareOrder(graphfile+".order1", graphfile+".order2");
@@ -3788,6 +3788,8 @@ void Graph::TDPCreateTreeAndParti(int pNum, double bRatioUpper, double bRatioLow
         //get partition vertex and graph
         makePartitionDFS(orderPartiV,k,id);
     }
+
+
     int noBoundayNum=0;
     orderOverlayV.clear();
     for(int i=0;i<node_num;++i){
@@ -4966,6 +4968,7 @@ int Graph::QueryNP(int ID1, int ID2){
     return dis;
 }
 
+//old version
 int	Graph::QueryCHWP(int ID1, int ID2){
     if(ID1==ID2) return 0;
     if(NodeOrder[ID1]==-1 || NodeOrder[ID2]==-1) return INF;
@@ -5067,6 +5070,97 @@ int	Graph::QueryCHWP(int ID1, int ID2){
     }
     return d;
 }
+
+//new version, incorrect
+/*int	Graph::QueryCHWP(int ID1, int ID2){
+    if(ID1==ID2) return 0;
+    if(NodeOrder[ID1]==-1 || NodeOrder[ID2]==-1) return INF;
+    int d=INF;
+    benchmark::heap<2,int,int> fHeapForward(node_num);
+    benchmark::heap<2, int, int> fHeapBackward(node_num);
+
+    //closed or not
+    vector<bool> vVisitedF(node_num, false);
+    vector<bool> vVisitedB(node_num, false);
+    //the existing shortest distance
+    vector<int>	vDistanceForward(node_num, INF);
+    vector<int>	vDistanceBackward(node_num, INF);
+    //stop search or not
+    bool bF = false;
+    bool bB = false;
+    vDistanceForward[ID1] = 0;
+    vDistanceBackward[ID2] = 0;
+    fHeapForward.update(ID1,0);
+    fHeapBackward.update(ID2,0);
+
+    int topNodeIDForward, topNodeIDBackward,topDisForward,topDisBackward, neighborNodeID, neighborLength;
+
+    while(!fHeapForward.empty() || !fHeapBackward.empty() )
+    {
+        if(fHeapForward.top_key() + fHeapBackward.top_key() >= d){
+            break;
+        }
+
+        //Forward Search
+        fHeapForward.extract_min(topNodeIDForward, topDisForward);
+        //cout<<topNodeIDForward<<" "<<topDisForward<<" "<<(NodeOrder[topNodeIDForward]>NodeOrder[137099])<<endl;
+
+        vVisitedF[topNodeIDForward] = true;
+
+//            for(auto out=NeighborCon[topNodeIDForward].begin();out!=NeighborCon[topNodeIDForward].end();out++){//
+        for(auto out=Tree[rank[topNodeIDForward]].vert.begin();out!=Tree[rank[topNodeIDForward]].vert.end();out++){//
+            neighborNodeID = (*out).first;
+            neighborLength = (*out).second.first;
+
+            int df = vDistanceForward[topNodeIDForward] + neighborLength;
+            if(!vVisitedF[neighborNodeID]){
+                if(vDistanceForward[neighborNodeID] > df){
+                    //if(neighborNodeID==37783) cout<<"neighdis "<<vDistanceForward[neighborNodeID]<<" adddis "<<df<<endl;
+                    vDistanceForward[neighborNodeID] = df;
+                    fHeapForward.update(neighborNodeID, df);
+                }
+            }
+
+            if(vVisitedB[topNodeIDForward]){
+                int distTmp = df + vDistanceBackward[topNodeIDForward];
+                if(distTmp<d){
+                    d=distTmp;
+                    //cout<<"forwardtopvalue "<<topDisForward<<" "<<vDistanceBackward[topNodeIDForward]<<" "<<d<<"meet "<<topNodeIDForward<<endl;
+                }
+            }
+        }
+
+
+        //Backward Search
+        fHeapBackward.extract_min(topNodeIDBackward, topDisBackward);
+
+        vVisitedB[topNodeIDBackward] = true;
+
+//            for(auto in=NeighborCon[topNodeIDBackward].begin();in!=NeighborCon[topNodeIDBackward].end();in++){
+        for(auto in=Tree[rank[topNodeIDBackward]].vert.begin();in!=Tree[rank[topNodeIDBackward]].vert.end();in++){
+            neighborNodeID = (*in).first;
+            neighborLength = (*in).second.first;
+
+            int db = vDistanceBackward[topNodeIDBackward] + neighborLength;
+            if(!vVisitedB[neighborNodeID]){
+                if(vDistanceBackward[neighborNodeID]>db){
+                    vDistanceBackward[neighborNodeID] = db;
+                    fHeapBackward.update(neighborNodeID, db);
+                }
+            }
+
+            if(vVisitedF[topNodeIDBackward]){
+                int distTmp = db + vDistanceForward[topNodeIDBackward];
+                if(distTmp<d){
+                    d=distTmp;
+                    //cout<<"backtopvalue "<<topDisBackward<<" "<<vDistanceForward[topNodeIDBackward]<<" "<<d<<"meet "<<topNodeIDBackward<<endl;
+                }
+            }
+        }
+
+    }
+    return d;
+}*/
 
 int Graph::LCAQuery(int _p, int _q){
     int p = toRMQ[_p], q = toRMQ[_q];

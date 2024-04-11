@@ -194,7 +194,7 @@ struct Node{//tree node
 
 class Graph{
 public:
-    string graphfile;
+    string sourcePath;// the source path
     string dataset;
 	int node_num=0;    //vertex number
 	unsigned long long edge_num=0;    //edge number
@@ -307,6 +307,8 @@ public:
 
     vector<bool> vUpdated;// flag of whether the label of vertex has been updated
     vector<int> bHeights;
+
+    int samePartiPortion=-1;
 
     ~Graph(){
         clear();
@@ -636,7 +638,7 @@ public:
     void ReadUpdate3(string filename,vector<pair<pair<int,int>,tuple<int,int,int>>>& TestData);
 	void StainingMethod(int ID);
 	void ODGene(int num, string filename);
-    void ODGeneParti(int num, string filename);
+    void ODGeneParti(int num, string filename, int portion);
     void ODGeneSameParti(int num, string filename);
     void ODGeneCrossParti(int num, string filename);
 	void UpdateGene(int num, string filename);
@@ -651,6 +653,8 @@ public:
     void ReadOrder(string filename);
     void CompareOrder(string filename1, string filename2);
     void GraphPartitionRead(string filename);
+    void WritePostMHLPartiResult(string filename);
+    void ReadPostMHLPartiResult(string filename);
 
     vector<int> DFS_CC(vector<map<int,int>> & Edges, set<int> set_A, set<int> & set_B, int nodenum);
     vector<int> DFS_CC(vector<vector<pair<int,int>>> & Edges, set<int> set_A, set<int> & set_B, int nodenum);

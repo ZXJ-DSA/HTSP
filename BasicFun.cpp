@@ -61,7 +61,7 @@ void Graph::ReadGraph(string filename){
     DFS_CC(Neighbor,vertices,mcc,node_num);
 
     /// Read the coordinates
-    ReadCoordinate(graphfile+".co");
+//    ReadCoordinate(sourcePath+dataset+".co");
 }
 
 //function for reading coordinates
@@ -136,9 +136,119 @@ void Graph::WriteGraph(string graphfile){
     OF.close();
     cout<<"Done."<<endl;
 }
-//function of writing core graph into disk
+//function of writing partition result of PostMHL
+void Graph::WritePostMHLPartiResult(string filename) {
+    //Write order file to disk
+    ofstream OF(filename);
+    if(!OF){
+        cout<<"Cannot open Map "<<filename<<endl;
+        exit(1);
+    }
+    cout<<"Writing PostMHL partition result..."<<endl;
+    int vNum=0;
+    OF<<partiNum<<endl;
+    for(int pid = 0; pid < partiNum; ++pid){
+        OF << PartiVertex[pid].size()<<endl;
+        vNum+=PartiVertex[pid].size();
+        for(int i=0;i<PartiVertex[pid].size();++i){
+            OF << PartiVertex[pid][i] << " ";//ID, order
+        }
+        OF << endl;
+    }
+    vNum+=OverlayVertex.size();
+    OF<<OverlayVertex.size()<<endl;
+    for(int i=0;i<OverlayVertex.size();++i){
+        OF << OverlayVertex[i] << " ";//ID, order
+    }
+    OF << endl;
+    OF.close();
+    if(vNum != node_num){
+        cout<<"Inconsistent vertex number! "<<vNum<<" "<<node_num<<endl; exit(1);
+    }
+    cout<<"Write done."<<endl;
 
-//function of vertex order reading
+}
+void Graph::ReadPostMHLPartiResult(string filename){
+//    filename="/Users/zhouxj/Documents/1-Research/Datasets/NY/NY_NC_64/vertex_order";
+    ifstream inFile(filename, ios::in);
+    if (!inFile) { // if not exist
+        cout << "Fail to open file" << filename << endl;
+        exit(1);
+    }
+//    cout<<"Partition file: "<<filename<<endl;
+    int nodeNum;
+    string line;
+    getline(inFile,line);
+    vector<string> vs;
+    boost::split(vs,line,boost::is_any_of(" \t"),boost::token_compress_on);
+    partiNum=stoi(vs[0]);
+    cout<<"Partition number: "<<partiNum<<endl;
+    PartiVertex.assign(partiNum,vector<int>());
+
+    int ID, order, num=0;
+    for(int pid=0;pid<partiNum;++pid){
+        getline(inFile,line);
+        assert(!line.empty());
+        vs.clear();
+        boost::split(vs,line,boost::is_any_of(" \t"),boost::token_compress_on);
+        int vNum=stoi(vs[0]);
+
+        getline(inFile,line);
+        vs.clear();
+        boost::split(vs,line,boost::is_any_of(" \t"),boost::token_compress_on);
+        if(vNum!=vs.size()-1){
+            cout<<"PID "<<pid<<" . Inconsistent partition vertex number! "<<vNum<<" "<<vs.size()<<endl;
+            exit(1);
+        }
+        for(int i=0;i<vs.size();++i){
+            if(!vs[i].empty()){
+                ID=stoi(vs[i]);
+                if(ID>=0 && ID<node_num){
+                    PartiVertex[pid].push_back(ID);
+                }else{
+                    cout<<"Wrong vertex id. "<<ID<<endl; exit(1);
+                }
+            }
+//            else{
+//                cout<<i<<" "<<vs[i]<<endl;
+//                continue;
+//            }
+
+
+        }
+
+        if(inFile.eof())
+            break;
+    }
+    getline(inFile,line);
+    vs.clear();
+    boost::split(vs,line,boost::is_any_of(" \t"),boost::token_compress_on);
+    int vNum=stoi(vs[0]);
+
+    getline(inFile,line);
+    vs.clear();
+    boost::split(vs,line,boost::is_any_of(" \t"),boost::token_compress_on);
+    if(vNum!=vs.size()-1){
+        cout<<"Overlay. Inconsistent vertex number! "<<vNum<<" "<<vs.size()<<endl;
+        exit(1);
+    }
+    for(int i=0;i<vs.size();++i){
+        if(!vs[i].empty()){
+            ID=stoi(vs[i]);
+            if(ID>=0 && ID<node_num){
+                OverlayVertex.push_back(ID);
+            }else{
+                cout<<"Wrong vertex id. "<<ID<<endl; exit(1);
+            }
+        }
+
+
+    }
+    cout<<"Read done."<<endl;
+    inFile.close();
+}
+
+//function of vertex order writing
 void Graph::WriteOrder(string filename){
     //Write order file to disk
     ofstream OF(filename);
@@ -210,6 +320,8 @@ void Graph::ReadOrder(string filename){
 
     NodeOrder_=NodeOrder;
 }
+
+
 
 //function for comparing the orders
 void Graph::CompareOrder(string filename1, string filename2){
@@ -1140,34 +1252,57 @@ void Graph::ODGene(int num, string filename){
     OF.close();
 }
 void Graph::QueryGenerationParti(bool ifSame){
-    string partitionfile=graphfile+"_"+algoParti+"_"+to_string(partiNum);
-    string orderfile=graphfile+".orderP";
-    orderfile=graphfile+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
+    string partitionfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum);
+    string orderfile;
 
-    ReadOrder(orderfile);
-    GraphPartitionRead(partitionfile);//read partitions
+    if(algoChoice==3){
+        orderfile=sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+to_string(partiNum)+"/vertex_orderMDE2";
+        int partiNumber=partiNum;
+        ReadOrder(orderfile);
+        GraphPartitionRead(partitionfile);//read partitions
+//    ODGeneSameParti(100000,sourcePath+dataset+"partitions/"+dataset+"_"+algoParti+"_"+ to_string(partiNum)+"/SameParti.query");//same partition
+//    ODGeneParti(100000,sourcePath+dataset+"partitions/"+dataset+"_"+algoParti+"_"+ to_string(partiNum)+"/Simulate.query",0.9);//real-world simulation
+//    ODGeneCrossParti(100000,sourcePath+dataset+"partitions/"+dataset+"_"+algoParti+"_"+ to_string(partiNum)+"CrossParti.query");//cross-partition simulation
+        for(int i=100;i>=50;i-=10){
+            double portion=i;
+            portion/=100;
+            ODGeneParti(100000,sourcePath+"partitions/"+dataset+"_"+algoParti+"_"+ to_string(partiNumber)+"/sameParti_"+to_string(i)+".query",portion);
+        }
+    }else if(algoChoice==5){
+        orderfile= sourcePath + "tmp/"+dataset+".PostMHL_"+to_string(bandWidth)+".order";
+        int partiNumber=partiNum;
 
-//    ODGene(10000, graphfile+".query");//
-//    UpdateGene(10000, graphfile+".update");
+        ifstream IF(orderfile);
+        if(!IF){//if the label file does not exist, construct it
+            ReadGraph(sourcePath+dataset);//
+            TreeDecompositionPartitioning(partiNum,bRatioUpper,bRatioLower);
+            WritePostMHLPartiResult(sourcePath + "tmp/"+dataset+".PostMHL_"+to_string(bandWidth)+".partiInfo");
+        }else{
+            ReadOrder(orderfile);
+            ReadPostMHLPartiResult(sourcePath + "tmp/"+dataset+".PostMHL_"+to_string(bandWidth)+".partiInfo");//read partitions
+            IF.close();
+        }
 
-    ODGeneSameParti(10000,graphfile+".querySameParti");//same partition
-    ODGeneParti(10000,graphfile+".queryParti");//real-world simulation
-    ODGeneCrossParti(10000,graphfile+".queryCrossParti");//cross-partition simulation
+        for(int i=100;i>=50;i-=10){
+            ODGeneParti(100000, sourcePath + "tmp/"+dataset+".PostMHL_"+to_string(bandWidth)+".sameParti_"+to_string(i)+".query",i);
+        }
+    }
+
     exit(0);
 }
 //Function of generating realistic query
-void Graph::ODGeneParti(int num, string filename){
+void Graph::ODGeneParti(int num, string filename, int portion){
     set<pair<int,int>> ODpair;
     vector<pair<int,int>> ODpairVec;
 
     srand (0);
     int s, t;
-    double portion=0.99;
-    int numSameParti=portion*num;
-    int numCrossParti=(1-portion)*num;
+//    double portion=0.99;
+    int numSameParti=portion*num/100;
+    int numCrossParti=(100-portion)*num/100;
     vector<pair<int,int>> ODpairVecSP, ODpairVecCP;
 
-    cout<<"Generating mixture queries ("<<portion*100<<"% same-partition queries)..."<<endl;
+    cout<<"Generating mixture queries ("<<portion<<"% same-partition queries)..."<<endl;
 
     for(int i=0;i<numSameParti;i++){
         int pid=rand()%partiNum;
@@ -1204,7 +1339,7 @@ void Graph::ODGeneParti(int num, string filename){
         }
     }
     cout<<"ODpairVecCP: "<<ODpairVecCP.size()<<endl;
-    int base=100*(1-portion);
+    int base=100-portion;
     cout<<"Base: "<<base<<endl;
     int sp_i=0; int cp_i=0;
     for(int i=0;i<num;++i){

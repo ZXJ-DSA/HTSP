@@ -8,29 +8,32 @@
 
 int main(int argc, char** argv){
 
-    if( argc < 4 || argc > 17){//
+    if( argc < 4 || argc > 18){//
         printf("usage:\n<arg1> source path, e.g. /export/project/xzhouby\n");
         printf("<arg2> name of dataset, e.g. NY\n");
-        printf("<arg3> HTSP system index, 1: CH+H2H; 2: PH2H; 3: PCH+PH2H; 4: Optimized PCH+PH2H; 5: PostMHL. default: 2\n");
+//        printf("<arg3> HTSP system index, 1: CH+H2H; 2: PH2H; 3: PCH+PH2H; 4: Optimized PCH+PH2H; 5: PostMHL. default: 2\n");
+        printf("<arg3> HTSP system index, 1: CH+H2H; 3: PCH+PH2H; 5: PostMHL. default: 5\n");
         printf("<arg4> (optional) partition number, e.g. 64\n");
         printf("<arg5> (optional) partition method, (NC: PUNCH; MT: METIS), default: NC\n");
         printf("<arg6> (optional) query strategy, (0:A*; 1: PCH (CH); 2: No-boundary; 3: Post-boundary; 4: Cross-boundary (H2H)), default: 4\n");
         printf("<arg7> (optional) update type, (0: No Update Test; 1: Decrease; 2: Increase), default: 0\n");
-        printf("<arg8> (optional) whether batch update, (0: No; 1: Yes), default: 0\n");
+        printf("<arg8> (optional) whether batch update, (0: No; 1: Yes), default: 1\n");
         printf("<arg9> (optional) batch number, default: 10\n");
         printf("<arg10> (optional) batch size, default: 10\n");
         printf("<arg11> (optional) batch interval (in seconds), default: 10\n");
         printf("<arg12> (optional) thread number, default: 15\n");
-        printf("<arg13> (optional) bandwidth, default: 50\n");
-        printf("<arg14> (optional) lower bound ratio, default: 0.1\n");
-        printf("<arg15> (optional) upper bound ratio, default: 2\n");
-        printf("<arg16> (optional) preprocessing task (1: Partitioned MDE Ordering; 2: Partitioned Query Generation)\n");
+        printf("<arg13> (optional) same-partition query proportion, -1: random; 0-100: 0-100%,  default: -1 (random)\n");
+        printf("<arg14> (optional) bandwidth, default: 50\n");
+        printf("<arg15> (optional) lower bound ratio, default: 0.1\n");
+        printf("<arg16> (optional) upper bound ratio, default: 2\n");
+        printf("<arg17> (optional) preprocessing task (1: Partitioned MDE Ordering; 2: Partitioned Query Generation)\n");
+
         exit(0);
     }
 
     string DesFile="./data/";
     string dataset = "NY";
-    int algoChoice = 1;
+    int algoChoice = 5;
     int partitionNum = 20;
     int algoQuery = 4;
     string algoParti = "NC";
@@ -47,6 +50,7 @@ int main(int argc, char** argv){
     int bandwidth=50;
     double lowerB=0.1;
     double upperB=2;
+    int portion=-1;
 
     if(argc > 1) {
         cout << "argc: " << argc << endl;
@@ -101,20 +105,25 @@ int main(int argc, char** argv){
             threadNum = stoi(argv[12]);
         }
         if(argc > 13){
-            cout << "argv[13] (Bandwidth): " << argv[13] << endl;//bandwidth
-            bandwidth = stoi(argv[13]);
+            cout << "argv[13] (Same-parti Proportion): " << argv[13] << endl;
+            portion = stoi(argv[13]);
         }
         if(argc > 14){
-            cout << "argv[14] (Lower bound ratio): " << argv[14] << endl;//lower bound ratio
-            lowerB = stod(argv[14]);
+            cout << "argv[14] (Bandwidth): " << argv[14] << endl;//bandwidth
+            bandwidth = stoi(argv[14]);
         }
         if(argc > 15){
-            cout << "argv[15] (Upper bound ratio): " << argv[15] << endl;//upper bound ratio
-            upperB = stod(argv[15]);
+            cout << "argv[15] (Lower bound ratio): " << argv[15] << endl;//lower bound ratio
+            lowerB = stod(argv[15]);
         }
         if(argc > 16){
-            cout << "argv[16] (Preprocessing Task): " << argv[16] << endl;//preprocessing task
-            preTask = stoi(argv[16]);
+            cout << "argv[16] (Upper bound ratio): " << argv[16] << endl;//upper bound ratio
+            upperB = stod(argv[16]);
+        }
+
+        if(argc > 17){
+            cout << "argv[17] (Preprocessing Task): " << argv[17] << endl;//preprocessing task
+            preTask = stoi(argv[17]);
         }
 
     }
@@ -123,16 +132,15 @@ int main(int argc, char** argv){
     Timer tt0;
     tt0.start();
 
-//    string graphfile="/media/TraminerData/mengxuan/MengxuanGraphWPSL/Cond/CondWeighted";
-    string graphfile=DesFile+"/"+dataset+"/"+dataset;
-    string ODfile=graphfile+".query";
-    string updateFile=graphfile+".update";
+    string sourcePath=DesFile+"/"+dataset+"/";
+    string ODfile=sourcePath+dataset+".query";
+    string updateFile=sourcePath+dataset+".update";
 
 
 
     Graph g;
     g.threadnum=threadNum;//thread number of parallel computation (can be changed)
-    g.graphfile=graphfile;
+    g.sourcePath=sourcePath;
     g.ifParallel = true;
     g.dataset=dataset;
     g.algoChoice=algoChoice;
@@ -143,6 +151,7 @@ int main(int argc, char** argv){
     g.bandWidth=bandwidth;
     g.bRatioLower=lowerB;
     g.bRatioUpper=upperB;
+    g.samePartiPortion=portion;
     cout<<"Dataset: "<<dataset<<endl;
     cout<<"System Index: "<<algoChoice<<endl;
     if(g.algoQuery==Dijk){
@@ -179,7 +188,6 @@ int main(int argc, char** argv){
     }
     else if(preTask==2){
         g.QueryGenerationParti(true);//same partition and real-world simulation
-
     }
 
 //    g.ReadGraph(graphfile);//
