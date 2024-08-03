@@ -205,10 +205,28 @@ int main(int argc, char** argv){
 //    g.EffiCheck(ODfile+"SameParti",runtimes);
 //    g.EffiCheck(ODfile+"CrossParti",runtimes);
 //    exit(0);
+//    int id1=205055, id2=179964;
+////        cout<<"Before update "<<i<<". "<<id1<<"("<<NodeOrder[id1]<<","<<PartiTags[id1].first<<") "<<id2<<"("<<NodeOrder[id2]<<","<<PartiTags[id2].first<<") "<<QueryPostMHL(id1,id2)<<"("<<Dijkstra(id1,id2,Neighbor)<<")"<<endl;
+//    cout<<"Before all. "<<id1<<"("<<g.NodeOrder[id1]<<") "<<id2<<"("<<g.NodeOrder[id2]<<") "<<endl;
+//    for(auto it=g.Tree[g.rank[id1]].vert.begin();it!=g.Tree[g.rank[id1]].vert.end();++it){
+//        if(it->first==id2){
+//            cout<<"CH index. "<<id1<<" "<<id2<<" "<<it->second.first<<" "<<it->second.second<<endl;
+//            break;
+//        }
+//    }
+//    g.PostMHLIndexCompareCH(g.sourcePath+dataset+".CHIndex19");
+//    g.MHLIndexCompareCH(g.sourcePath+dataset+".CHIndex0");
+//    exit(0);
     ///Task 3: Index update
-    g.SPThroughputTest(updateType, ifBatch, batchNum, batchSize, batchInterval, runtimes);
+    if(dataset=="beijing" || dataset=="Guangdong" || dataset=="Test2"){//real-life updates
+        g.RealUpdateThroughputTest(sourcePath+dataset+"_20160105.updates");
+    }else{
+        g.RandomUpdateThroughputTest(sourcePath+dataset+".update", batchNum, batchSize, batchInterval);
+//        g.SPThroughputTest(updateType, ifBatch, batchNum, batchSize, batchInterval, runtimes);
 //    g.IndexMaintenance(updateType,updateSize, ifBatch, batchSize);//index maintenance
 //    g.IndexMaiEachNntenance(updateFile+"ST",updateType,updateBatch);//same-tree index maintenance
+    }
+
 
     tt0.stop();
     cout<<"\nOverall runtime: "<<tt0.GetRuntime()<<" s."<<endl;

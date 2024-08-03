@@ -16,30 +16,38 @@ void Graph::ReadGraph(string filename){
         cout<<"Cannot open file "<<filename<<endl;
         exit(1);
     }
-    cout<<"Reading graph..."<<endl;
+    cout<<"Reading graph... "<<filename<<endl;
     Timer tt;
     tt.start();
     string line;
     getline(inGraph,line);
     vector<string> vs;
     boost::split(vs,line,boost::is_any_of(" \t"),boost::token_compress_on);
-    node_num=stoi(vs[0]); edge_num=0;
+    node_num=stoi(vs[0]); edge_num=stoull(vs[1]);
     int tempENum=stoi(vs[1]);
-    getline(inGraph,line);
     //graph g initialize
     Neighbor.assign(node_num, vector<pair<vertex,int>>());
+    vector<map<int,int>> NeighborMapT;
+    NeighborMapT.assign(node_num,map<int,int>());
     set<int> vertices;
-
+    unsigned long long edgeNum=0;
     int ID1,ID2, weight;
-    while(!line.empty()){
-        vector<string> vs;
+    while(getline(inGraph,line)){
+        if(line.empty()) continue;
+        vs.clear();
         boost::split(vs,line,boost::is_any_of(" \t"),boost::token_compress_on);
         ID1=stoi(vs[0]); ID2=stoi(vs[1]); weight=stoi(vs[2]);
 //        weight=1;
         if(ID1>=0&&ID1<node_num && ID2>=0&&ID2<node_num && weight>0){
-            edge_num++;
-            Neighbor[ID1].emplace_back(ID2,weight);
-//            Neighbor[ID2].emplace_back(ID1,weight);
+            if(NeighborMapT[ID1].find(ID2)==NeighborMapT[ID1].end()){//if not found
+                NeighborMapT[ID1].insert({ID2,weight});
+                NeighborMapT[ID2].insert({ID1,weight});
+                edgeNum+=2;
+            }else{
+                if(NeighborMapT[ID1][ID2]!=weight){
+                    cout<<"Inconsistent graph data!!! "<<ID1<<" "<<ID2<<" "<<NeighborMapT[ID1][ID2]<<" "<<weight<<endl; exit(1);
+                }
+            }
             if(vertices.find(ID1)==vertices.end()){//if not found
                 vertices.insert(ID1);
             }
@@ -48,10 +56,18 @@ void Graph::ReadGraph(string filename){
             cout<<"Wrong data! "<<ID1<<" "<<ID2<<" "<<weight<<endl; exit(1);
         }
 
-        if(inGraph.eof()) break;
-        getline(inGraph,line);
     }
     inGraph.close();
+    if(edgeNum != edge_num){
+        cout<<"Nominate edge number: "<<edge_num<<" ; real edge number: "<<edgeNum<<endl;
+        edge_num=edgeNum;
+        exit(1);
+    }
+    for(int i=0;i<NeighborMapT.size();++i){
+        for(auto it=NeighborMapT[i].begin();it!=NeighborMapT[i].end();++it){
+            Neighbor[i].emplace_back(it->first,it->second);
+        }
+    }
     tt.stop();
     cout<<"Finish Reading! Vertex number: "<<node_num<<"; Edge number: "<<edge_num<<". Time: "<<tt.GetRuntime()<<" s."<< endl;
     if(vertices.size()!=node_num){
@@ -256,7 +272,7 @@ void Graph::WriteOrder(string filename){
         cout<<"Cannot open Map "<<filename<<endl;
         exit(1);
     }
-    cout<<"Writing vertex order..."<<endl;
+    cout<<"Writing vertex order... "<< filename<<endl;
     OF<<node_num<<endl;
     for(int i = 0; i < NodeOrder.size(); i++){
         OF << i << "\t" << NodeOrder[i] << endl;//ID, order

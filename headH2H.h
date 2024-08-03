@@ -244,6 +244,8 @@ public:
     //// For throughput test
     void SPThroughputTest(int updateType, bool ifBatch, int batchNum, int batchSize, int batchInterval, int runtimes);
     unsigned long long EffiCheckThroughput(vector<pair<int,int>>& ODpair, Timer& tRecord, int batchInterval);
+    void RealUpdateThroughputTest(string updateFile);
+    void RandomUpdateThroughputTest(string updateFile, int batchNum, int batchSize, int batchInterval);
 
     //// For CH Index Maintenance
     void IndexMaintenanceCHWP(int updateType, int updateSize, bool ifBatch, int batchSize);

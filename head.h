@@ -396,7 +396,7 @@ public:
 
     /// PostMHL
     void TreeDecompositionPartitioningNaive();
-    void TreeDecompositionPartitioning(int pNum, double bRatioUpper, double bRatioLower);
+    double TreeDecompositionPartitioning(int pNum, double bRatioUpper, double bRatioLower);
     void TDPContract();
     void TDPCreateTreeAndPartiNaive();
     void TDPCreateTreeAndParti(int pNum, double bRatioUpper, double bRatioLower);
@@ -417,6 +417,10 @@ public:
     void PostMHLPartitionIndexConstructExtendV(vector<int>& p);
     void PostMHLmakeIndexDFSPartiExtend(int p, vector<int>& ancestors);
     void IndexSizePostMHL();
+
+    void PostMHLIndexStoreCH(string filename);
+    void PostMHLIndexCompareCH(string filename);
+    void MHLIndexCompareCH(string filename);
 
 
     void BoundShortcutsCheck(bool ifParallel, bool ifIncrease);
@@ -484,6 +488,8 @@ public:
     vector<vector<int>> vNodeOrderParti;
     vector<int> vNodeOrderOverlay;
 
+    double overlayUpdateT=0;
+
 	///Query processing
     int QueryNP(int ID1, int ID2);
     int QueryCHWP(int ID1, int ID2);
@@ -531,7 +537,10 @@ public:
 
     void EffiCheck(string filename,int runtimes);
     void EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int intervalT, unsigned long long & throughputNum, vector<double>& stageUpdateT, vector<double>& stageQueryT);
+    void GetBatchThroughput(vector<double> & queryTimes, int intervalT, unsigned long long & throughputNum, vector<double>& stageUpdateT);
+    void EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<double> & queryTimes);
     void StagePerformanceShow(int batchNum, vector<double>& stageUpdateT, vector<double>& stageQueryT);
+    void AverageStagePerformance(int batchNum, vector<double>& stageUpdateT, vector<double>& stageQueryT);
     double EffiMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType);
     double EffiPMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType);
     double EffiPostMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType);
@@ -564,6 +573,8 @@ public:
     int DijkstraCore(int ID1, int ID2);
 
     //// For throughput test
+    void RealUpdateThroughputTest(string updateFile);
+    void RandomUpdateThroughputTest(string updateFile, int batchNum, int batchSize, int batchInterval);
     void SPThroughputTest(int updateType, bool ifBatch, int batchNum, int batchSize, int batchInterval, int runtimes);
     void DecBatchThroughput(vector<pair<pair<int,int>,pair<int,int>>>& wBatch, int batch_i, double& runT1);//process batch update
     void IncBatchThroughput(vector<pair<pair<int,int>,pair<int,int>>>& wBatch, int batch_i, double& runT1);//process batch update

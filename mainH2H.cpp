@@ -28,7 +28,7 @@ int main(int argc, char** argv){
     int algorithm = 2;
     int updateType = 0;
     bool ifBatch = false;
-    int runtimes = 10000;
+    int runtimes = 1000;
 //    runtimes=100;
     int batchNum = 10;
     int batchSize = 10;
@@ -119,10 +119,16 @@ int main(int argc, char** argv){
 //    exit(0);
 
     ///Task 3: Index update
-    g.SPThroughputTest(updateType, ifBatch, batchNum, batchSize, batchInterval, runtimes);
+    if(dataset=="beijing" || dataset=="Guangdong"){//real-life updates
+        g.RealUpdateThroughputTest(sourcePath+dataset+"_20160105.updates");
+    }else{
+        g.RandomUpdateThroughputTest(sourcePath+dataset+".update", batchNum, batchSize, batchInterval);
+//        g.SPThroughputTest(updateType, ifBatch, batchNum, batchSize, batchInterval, runtimes);
 //    g.IndexMaintenanceCHWP(updateType, updateSize, ifBatch, batchSize);//index maintenance
 //    g.IndexMaintenanceH2H(updateType, updateSize, ifBatch, batchSize);//index maintenance
 //    g.IndexMaintenance(updateFile+"ST",updateType,updateBatch);//same-tree index maintenance
+    }
+
 
     tt0.stop();
     cout<<"\nOverall runtime: "<<tt0.GetRuntime()<<" s."<<endl;
