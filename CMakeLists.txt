@@ -13,20 +13,10 @@ if (Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
     link_directories(${Boost_LIBRARY_DIRS})
 endif ()
-# openMP
-find_package(OpenMP)
-if (OPENMP_FOUND)
-    message(STATUS "OpenMP find.")
-    message(STATUS "OpenMP_C_FLAGS: ${OpenMP_C_FLAGS}")
-    message(STATUS "OpenMP_CXX_FLAGS: ${OpenMP_CXX_FLAGS}")
-    message(STATUS "OpenMP_EXE_LINKER_FLAGS: ${OpenMP_EXE_LINKER_FLAGS}")
-    message(STATUS "OPENMP_INCLUDE_DIRS: ${OPENMP_INCLUDE_DIRS}")
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-endif()
+
 
 add_definitions(-w) # omit warning information
+
 
 add_executable(DPH2H main.cpp BasicFun.cpp PH2H.cpp)
 #add_executable(DH2H mainH2H.cpp BasicFunH2H.cpp H2H.cpp)

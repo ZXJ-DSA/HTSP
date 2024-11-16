@@ -17,7 +17,6 @@ void Graph::IndexConstruction(int algo){
     switch (algoIndex) {
         case 0:{
             cout<<"Dijkstra's algorithm."<<endl;
-
             break;
         }
         case 1:{
@@ -28,6 +27,10 @@ void Graph::IndexConstruction(int algo){
         case 2:{
             cout<<"H2H algorithm."<<endl;
             H2HIndexConstruct();
+            break;
+        }
+        case 3:{
+            cout<<"BiDijkstra's algorithm."<<endl;
             break;
         }
         default:{
@@ -684,7 +687,7 @@ void Graph::IndexsizeH2H(){
 
 //function for correctness check
 void Graph::CorrectnessCheck(int runtimes){
-    if(algoIndex==0){
+    if(algoIndex==0||algoIndex==3){
         return;
     }
     Timer tt;
@@ -708,14 +711,17 @@ void Graph::CorrectnessCheck(int runtimes){
         tt.stop();
         if(algoIndex==0){
             d2=d1;
-        }
-        if(algoIndex==1){
+        }else if(algoIndex==1){
             tt.start();
             d2=QueryCHWP(s,t);
             tt.stop();
         }else if(algoIndex==2){
             tt.start();
             d2=QueryH2H(s,t);
+            tt.stop();
+        }else if(algoIndex==3){
+            tt.start();
+            d2=BiDijkstra(s,t,Neighbor);
             tt.stop();
         }
 
@@ -742,6 +748,49 @@ void Graph::EffiCheck(int runtimes){
 //        EffiCheckH2H(ODfile+"Parti",runtimes);//query efficiency test
 //        EffiCheckH2H(ODfile+"SameParti",runtimes);//query efficiency test
 //        EffiCheckH2H(ODfile+"CrossParti",runtimes);
+    }else if(algoIndex==3){
+        runtimes/=100;
+        ifstream IF(ODfile);
+        if(!IF){
+            cout<<"Cannot open Map "<<ODfile<<endl;
+            exit(1);
+        }
+        cout<<"Query file: "<<ODfile<<endl;
+        int num, ID1, ID2;
+        vector<pair<int,int>> ODpair;
+        IF>>num;
+        for(int k=0;k<num;k++){
+            IF>>ID1>>ID2;
+            ODpair.push_back(make_pair(ID1, ID2));
+        }
+        if(runtimes > num){
+            runtimes = num;
+        }
+        cout<<"Efficiency test. Run times: "<<runtimes<<endl;
+        int s, t;
+        double runT=0;
+        int d1, d2;
+        Timer tt;
+        clock_t start = clock();
+
+        vector<int> results(runtimes,-1);
+        for(int i=0;i<runtimes;i++){
+            s=ODpair[i].first; t=ODpair[i].second;
+//        d1=Dijkstra(s,t,Neighbor);
+            tt.start();
+            d2=BiDijkstra(s,t,Neighbor);
+            tt.stop();
+            runT += tt.GetRuntime();
+            results[i]=d2;
+//        cout<<d2<<" ";//<<endl;
+//        if(d1!=d2){
+//            cout<<"Wrong! "<<s<<" "<<t<<" "<<d2<<" "<<d1<<endl; exit(1);
+//        }
+        }
+
+//    cout<<endl;
+
+        cout<<"Average Query Time: "<<1000*runT/runtimes<<" ms. "<<1000*(double)(clock() - start) / (CLOCKS_PER_SEC*runtimes)<<" ms."<<endl;
     }
 }
 
@@ -1773,6 +1822,780 @@ void Graph::RandomUpdateThroughputTest(string updateFile, int batchNum, int batc
     cout<<"\nOverall throughput: "<<throughputNum<<" ; Average throughput: "<<throughputNum/batchNum<<" ; Average batch update Time: "<<runT2/batchNum<<" s; Average query time: "<<1000*queryT/batchNum<<" ms."<<endl;
 
 }
+//function of testing the throughput on random updates
+void Graph::RandomUpdateThroughputTestQueueModel(int batchNum, int batchSize, int batchInterval, double T_r, int workerNum) {//T_r is in second
+    bool ifDebug=false;
+//    ifDebug=true;
+    int runtimes=10000;
+//    runtimes=1000;
+    string updateFile=sourcePath+dataset+".update";
+    ifstream IF(updateFile);
+    if(!IF){
+        cout<<"Cannot open file "<<updateFile<<endl;
+        exit(1);
+    }
+    cout<<"update file: "<<updateFile<<endl;
+    string line;
+    vector<string> vs;
+    int ID1,ID2,oldW,newW,weight;
+    getline(IF,line);
+    vs.clear();
+    boost::split(vs,line,boost::is_any_of(" "));
+    assert(vs.size()==1);
+    int eNum=stoi(vs[0]);
+    if(batchNum*batchSize>eNum){
+        batchNum=eNum/batchSize;
+        cout<<"Actual batch number: "<<batchNum<<endl;
+    }
+    vector<vector<pair<pair<int,int>,int>>> batchUpdates(batchNum);
+    for(int i=0;i<batchNum;++i){
+        for(int j=0;j<batchSize;++j){
+            getline(IF,line);
+            vs.clear();
+            boost::split(vs,line,boost::is_any_of(" "));
+            ID1=stoi(vs[0]), ID2=stoi(vs[1]), weight=stoi(vs[2]);
+            batchUpdates[i].emplace_back(make_pair(ID1,ID2),weight);
+        }
+    }
+    IF.close();
+    cout<<"Update batch number: "<<batchNum<<" ; batch size: "<<batchSize<<" ; Batch interval: "<< batchInterval<<endl;
+
+    string queryF = sourcePath+dataset + ".query";
+
+    ifstream IF2(queryF);
+    if(!IF2){
+        cout<<"Cannot open file "<<queryF<<endl;
+        exit(1);
+    }
+    cout<<"Query file: "<<queryF<<endl;
+    int num;
+    vector<pair<int,int>> ODpair;
+    IF2>>num;
+    for(int k=0;k<num;k++){
+        IF2>>ID1>>ID2;
+        ODpair.emplace_back(ID1, ID2);
+    }
+    IF2.close();
+
+    //index maintenance
+    Timer tt;
+    double runT1=0, runT2 = 0;
+    double throughputNum=0;
+    double queryT=0;
+    double updateTime=0;
+    vector<vector<double>> stageUpdateT(2,vector<double>());//(stage, update time)
+    vector<vector<double>> stageQueryT(2,vector<double>());//(stage, query times)
+    vector<pair<pair<int,int>,pair<int,int>>> wBatchDec;
+    vector<pair<pair<int,int>,pair<int,int>>> wBatchInc;
+
+    double queryTime=EffiStageCheck(ODpair, runtimes, stageQueryT);
+
+    for(int i=0;i<batchNum;++i){
+        wBatchDec.clear(); wBatchInc.clear();
+        map<pair<int,int>,int> uEdges;
+        for(int j=0;j<batchUpdates[i].size();++j){
+            ID1=batchUpdates[i][j].first.first, ID2=batchUpdates[i][j].first.second, weight=batchUpdates[i][j].second;
+            bool ifFind=false;
+            if(ID1>ID2){
+                int temp=ID1;
+                ID1=ID2, ID2=temp;
+//                cout<<"ID2 is smaller!"<<ID1<<" "<<ID2<<endl;
+            }
+            if(j<batchSize/2){//decrease update
+                for(auto it=Neighbor[ID1].begin();it!=Neighbor[ID1].end();++it){
+                    if(it->first==ID2){
+                        ifFind=true;
+                        oldW=it->second;
+//                        weight=(0.5+0.5*rand()/(RAND_MAX+1.0))*oldW;
+//                        cout<<weight<<endl;
+                        weight=oldW/2;
+                        if(weight>0 && weight<oldW){
+//                        cout<<"Dec "<<ID1<<" "<<ID2<<" "<<oldW<<" "<<weight<<endl;
+                            wBatchDec.emplace_back(make_pair(ID1,ID2), make_pair(oldW,weight));
+                        }
+
+                        break;
+                    }
+                }
+            }
+            else{//increase update
+                for(auto it=Neighbor[ID1].begin();it!=Neighbor[ID1].end();++it){
+                    if(it->first==ID2){
+                        ifFind=true;
+                        oldW=it->second;
+//                        weight=(1+1*rand()/(RAND_MAX+1.0))*oldW;
+                        weight=2*oldW;
+                        if(weight>0 && weight>oldW) {
+//                        cout<<"Inc "<<ID1<<" "<<ID2<<" "<<oldW<<" "<<weight<<endl;
+                            wBatchInc.emplace_back(make_pair(ID1, ID2), make_pair(oldW, weight));
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if(uEdges.find(make_pair(ID1,ID2))==uEdges.end()){//if not found
+                uEdges.insert({make_pair(ID1,ID2),weight});
+            }else{
+                cout<<"Wrong. Find. "<<ID1<<" "<<ID2<<" "<<weight<<" "<<uEdges[make_pair(ID1,ID2)]<<" "<<oldW <<endl;
+                exit(1);
+            }
+
+            if(!ifFind){
+                cout<<"Wrong edge update. "<<ID1<<" "<<ID2<<" "<<endl; exit(1);
+            }
+        }
+        cout<<"Batch "<<i<<" . Decrease update number: "<<wBatchDec.size()<<" ; Increase update number: "<<wBatchInc.size()<<endl;
+        updateTime=0;
+        //Step 1: Decrease updates
+        if(!wBatchDec.empty()){
+            cout<<"Decrease update. "<<wBatchDec.size()<<endl;
+            if(algoIndex==0 || algoIndex==3){//Dijkstra
+                tt.start();
+                int a,b;
+                for(int k=0;k<wBatchDec.size();k++) {
+                    a = wBatchDec[k].first.first;
+                    b = wBatchDec[k].first.second;
+                    newW = wBatchDec[k].second.second;
+
+                    //modify the information in original graph
+                    for (int i = 0; i < Neighbor[a].size(); i++) {
+                        if (Neighbor[a][i].first == b) {
+                            Neighbor[a][i].second = newW;
+                            break;
+                        }
+                    }
+                    for (int i = 0; i < Neighbor[b].size(); i++) {
+                        if (Neighbor[b][i].first == a) {
+                            Neighbor[b][i].second = newW;
+                            break;
+                        }
+                    }
+                }
+                tt.stop();
+            }else if(algoIndex==1){//CH update
+                tt.start();
+                CHdecBat(wBatchDec);
+                tt.stop();
+            } else if(algoIndex==2){//H2H update
+                tt.start();
+                H2HdecBat(wBatchDec);
+                tt.stop();
+            }
+            updateTime+=tt.GetRuntime();
+//            runT1 += runT;
+//            cout<<"Batch "<<i<<". Update time: "<<tt.GetRuntime()<<" s."<<endl;
+////                    throughputNum += EffiCheckThroughput(ODpair,tRecord,batchInterval);//query efficiency test
+//            throughputNum += EffiCheckThroughput(ODpair,runtimes,batchInterval,runT,queryT);
+        }
+
+        //Step 2: Increase updates
+        if(!wBatchInc.empty()){
+            cout<<"Increase update. "<<wBatchInc.size()<<endl;
+            if(algoIndex==0 || algoIndex==3){
+                tt.start();
+                for(int wb=0;wb<wBatchInc.size();wb++) {
+                    int a = wBatchInc[wb].first.first;
+                    int b = wBatchInc[wb].first.second;
+                    int oldW = wBatchInc[wb].second.first;
+                    int newW = wBatchInc[wb].second.second;
+
+                    //modify the original graph information
+                    for (int i = 0; i < Neighbor[a].size(); i++) {
+                        if (Neighbor[a][i].first == b) {
+                            Neighbor[a][i].second = newW;
+                            break;
+                        }
+                    }
+                    for (int i = 0; i < Neighbor[b].size(); i++) {
+                        if (Neighbor[b][i].first == a) {
+                            Neighbor[b][i].second = newW;
+                            break;
+                        }
+                    }
+                }
+                tt.stop();
+            }else if(algoIndex==1){//CH update
+                tt.start();
+                CHincBatMT(wBatchInc);
+                tt.stop();
+            } else if(algoIndex==2){//H2H update
+                tt.start();
+                H2HincBatMT(wBatchInc);
+                tt.stop();
+            }
+            updateTime+=tt.GetRuntime();
+//            runT2 += runT;
+//            cout<<"Batch "<<i<<". Update time: "<<tt.GetRuntime()<<" s."<<endl;
+        }
+
+        cout<<"Batch "<<i<<" . Update time: "<<updateTime<<" s."<<endl;
+
+        if(ifDebug){
+            CorrectnessCheck(100);
+        }
+
+//        for(int i=0;i<stageUpdateT.size();++i){
+//            stageUpdateT[i].push_back(stageDurations[i]);
+//        }
+
+
+//        EffiCheckStages(ODpair,runtimes,batchInterval,throughputNum,stageUpdateT,stageQueryT);
+        vector<double> duration = StageDurationCompute(batchInterval,updateTime);
+        for(int j=0;j<duration.size();++j){
+            stageUpdateT[j].push_back(duration[j]);
+        }
+
+    }
+//    for(int i=0;i<stageDurations.size();++i){
+//        stageDurations[i]/=batchNum;
+//    }
+//    EffiCheckStages(ODpair,runtimes,batchInterval,throughputNum,stageUpdateT,stageQueryT);
+//    AverageStagePerformance(batchNum,stageUpdateT,stageQueryT);
+
+//    double throughputNum2 = ThroughputEstimate(stageQueryT, stageUpdateT, T_r, batchInterval);
+//    cout<<"Estimated throughput: "<<throughputNum2<<endl;
+//    throughputNum = ThroughputSimulate(stageQueryT,stageUpdateT,batchInterval*batchNum,T_r,batchInterval,queryTime);
+
+    pair<double,double> resultE = ThroughputEstimate(stageQueryT, stageUpdateT, T_r, batchInterval);
+    cout<<"Estimated throughput: "<<resultE.first<<" ; fastest available query time: "<<resultE.second*1000<<" ms"<<endl;
+//    throughputNum = ThroughputSimulate(stageQueryT,stageUpdateT,batchInterval*batchNum,T_r,batchInterval,resultE.second);
+    throughputNum = ThroughputSimulate(stageQueryT,stageUpdateT,batchInterval*batchNum,T_r,batchInterval,resultE.second,workerNum);
+//        vector<vector<double>> & simulated_query_costs, vector<double>& simulated_update_costs, int simulation_time, double threshold_time, double period_time, vector<vector<int> >& query_costs, vector<int>& batch_update_costs
+    cout<<"\nPartiNum: "<<partiNum<<". Throughput: "<<throughputNum<<" ; Average batch update Time: "<<updateTime/batchNum<<" s."<<endl;
+}
+
+//function for efficiency test
+double Graph::EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<vector<double>> & queryTimes){//return in seconds
+    cout<<"Efficiency test. Run times: "<<runtimes<<endl;
+    int s, t;
+    Timer tt;
+    double runT=0, runT1=0;
+    int d1,d2;
+
+    vector<int> results(runtimes,-1);
+    /// For BiDijkstra
+    for(int i=0;i<runtimes/100;i++){
+        s=ODpair[i].first; t=ODpair[i].second;
+//        d1=Dijkstra(s,t,Neighbor);
+        tt.start();
+        d2=BiDijkstra(s,t,Neighbor);
+        tt.stop();
+        runT1+=tt.GetRuntime();
+        results[i]=d2;
+        queryTimes[0].push_back(tt.GetRuntime());
+    }
+    runT1=runT1/(runtimes/100);
+    cout<<"Average Efficiency of Q-Stage 1 : "<<1000*runT1<<" ms."<<endl;
+    /// For SP index
+    if(algoIndex==1) {
+        for (int i = 0; i < runtimes / 10; i++) {
+            s = ODpair[i].first;
+            t = ODpair[i].second;
+            tt.start();
+            d2 = QueryCHWP(s, t);
+            tt.stop();
+            runT += tt.GetRuntime();
+            results[i] = d2;
+            queryTimes[1].push_back(tt.GetRuntime());
+        }
+        runT=runT/(runtimes/10);
+        cout<<"Average Efficiency of Q-Stage 2 : "<<1000*runT<<" ms."<<endl;
+    }
+    else if(algoIndex==2){
+        for (int i = 0; i < runtimes; i++) {
+            s = ODpair[i].first;
+            t = ODpair[i].second;
+            tt.start();
+            d2 = QueryH2H(s, t);
+            tt.stop();
+            runT += tt.GetRuntime();
+            results[i] = d2;
+            queryTimes[1].push_back(tt.GetRuntime());
+        }
+        runT=runT/runtimes;
+        cout<<"Average Efficiency of Q-Stage 2 : "<<1000*runT<<" ms."<<endl;
+    }else if(algoIndex==3 || algoIndex==0){
+        queryTimes[1]=queryTimes[0];
+        runT=runT1;
+        cout<<"Average Efficiency of Q-Stage 2 : "<<1000*runT<<" ms."<<endl;
+    }
+
+    tt.stop();
+    cout<<"Time for efficiency test: "<<tt.GetRuntime()<<" s."<<endl;
+    return runT;
+}
+
+vector<double> Graph::StageDurationCompute(int intervalT, double updateTime){
+//    double dt1=0,dt2=0,dt3=0,dt4=0,dt5=0;//actual duration for query stages
+    vector<double> durations(2,0);
+    double updateT=0;//overall update time
+
+    //Stage 1: Dijkstra
+    if(updateTime<intervalT){
+        durations[0]=updateTime;
+        //Stage 2: Index
+        durations[1]=intervalT-updateTime;
+
+    }else{
+        durations[0]=intervalT;
+    }
+
+    return durations;
+}
+
+double Graph::analytical_update_first(double T_q, double T_u, double T_r, double T, double V_q) {//T is duration, T_u is the average update time for one update, T_r is in seconds, return throughput
+//	M/M/1 return min(1.0 / T_q - 1.0 / T_r, 1.0 / T_q - tau * T_u / (T * T_q));
+//	M/G/1
+    if (T_r < T_q)
+        return 0;
+    double a = 2 * (T_r - T_q) / (V_q + 2 * T_r * T_q - T_q * T_q);
+    double lambda_u = T_u / T;
+    double b = (1 - lambda_u) / T_q;
+    double c = a < b ? a : b;
+    if (c < 0) return 0;
+    return c;
+}
+
+// function for estimating the system throughput, old
+/*double Graph::ThroughputEstimate(vector<vector<double>> &query_costs, vector<vector<double>> &update_costs, double threshold_time, double T) {
+    double queryT, duration, queryT_var;
+    double update_time;
+    double throughput=0.0;
+
+    for(int i=0;i<query_costs.size();++i){
+        duration = get_mean(update_costs[i]);
+        if(duration<=0)
+            continue;
+        queryT = get_mean(query_costs[i]);
+        queryT_var = get_var(query_costs[i]);
+        double tau = duration/T;
+        double thr = tau*analytical_update_first(queryT, 0, threshold_time/1000,  duration, queryT_var);
+        cout<<"Throughput of Q-stage "<<i+1<<" : "<<thr<<endl;
+        throughput+=thr;
+    }
+    return throughput;
+}*/
+
+// function for estimating the system throughput
+pair<double,double> Graph::ThroughputEstimate(vector<vector<double>> &query_costs, vector<vector<double>> &update_costs, double threshold_time, double T) {
+    double queryT, duration, queryT_var;
+    double update_time=0;
+    double durationT=0;
+    double throughput=0.0;
+    double tau, thr;
+    double query_time=INF;
+//    vector<double> updateT;
+//    updateT.push_back(0);
+
+    for(int i=0;i<query_costs.size();++i){
+        duration = get_mean(update_costs[i]);
+//        updateT.push_back(update_time);
+        if(duration<=0)
+            continue;
+        durationT+=duration;
+        queryT = get_mean(query_costs[i]);
+        queryT_var = get_var(query_costs[i]);
+        tau = duration/T;
+        if(queryT<query_time){
+            query_time=queryT;
+        }
+
+        thr = analytical_update_first(queryT, update_time, threshold_time,  durationT, queryT_var);
+//        cout<<i<<" . update time: "<<update_time<<" s ; estimate duration: "<<durationT<<" s"<<endl;
+        update_time+=duration;
+        cout<<"Throughput of Q-stage "<<i+1<<" : "<<thr<<" ; duration: "<< duration<<" s ; query time: "<<queryT*1000<<" ms"<<endl;
+        throughput+=thr*tau;
+    }
+//    cout<<"Weighted average of throughput: "<<throughput<<endl;
+    return make_pair(throughput,query_time);
+}
+
+// function for simulating the system throughput, old
+//double Graph::ThroughputSimulate(vector<vector<double>> & query_costs, vector<vector<double>>& update_costs, int simulation_time, double threshold_time, double period_time, double queryTime){//period_time is update interval time, simulation_time is the overall time for simulation
+//    Timer tt;
+//    tt.start();
+//    double l = 0, r = 5000000; // be careful of 'r'
+//    double throughput = 0.0;
+//    int lambda;
+//    int gap=10;
+////    double qTime=INF;
+////    for(int i=0;i<query_costs.size();++i){
+////        if(qTime>query_costs[i][0] && query_costs[i][0]>0){
+////            qTime=query_costs[i][0];
+////        }
+////    }
+//    if(r>100/queryTime){
+//        r=100/queryTime;
+//        gap=max((int)r/1000,1);
+//        gap=min(gap,10);
+//    }
+//
+//    cout<<"Simulate the throughput of system... r: "<<r<<" ; gap: "<<gap<<endl;
+//    while(l <= r){//why use different lambda? to get the suitable lambda
+//        lambda = (l+r)/2;
+//        auto queryList = generate_queryList(lambda, simulation_time);
+//        cout<<"lambda: "<<lambda<<" ; the size of querylist: "<<queryList.size()<<endl;
+//
+//        pair<double,double> result = simulator_UpdateFirst(query_costs, update_costs, queryList, simulation_time, period_time);
+//
+////        pair<double,double> result = simulator_UpdateFirst(simulated_query_costs, simulated_update_costs, queryList, simulation_time, period_time);
+//        if(result.second*1000 <= threshold_time){
+//            if(throughput < result.first) {
+////                cout<<"here:" << result.first<<endl;
+//                throughput=result.first;
+//
+//                cout<<"lambda: "<<lambda<<" ; throughput: "<<result.first<< " ; response query time: "<< result.second*1000 <<" ms"<<endl;
+//            }
+//            l = lambda + gap;
+////            l=l*1.1;
+//        }else{
+//            r = lambda - gap;
+////            r=r/1.1;
+//        }
+//
+//    }
+//
+//    tt.stop();
+//    cout<<"Time for throughput simulation: "<<tt.GetRuntime()<<" s"<<endl;
+//    return throughput;
+//}
+
+// function for simulating the system throughput
+double Graph::ThroughputSimulate(vector<vector<double>> & query_costs, vector<vector<double>>& update_costs, int simulation_time, double threshold_time, double period_time, double queryTime){//period_time is update interval time, simulation_time is the overall time for simulation
+    Timer tt;
+    tt.start();
+    double l = 0, r = 2000000; // be careful of 'r'
+    double throughput = 0.0;
+    int lambda;
+    int gap=1;
+
+    if(r>10/queryTime){
+        r=10/queryTime;
+    }
+    int num1=0;
+    cout<<"Simulate the throughput of system... r: "<<r<<" ; gap: "<<gap<<endl;
+    while(l <= r){//why use different lambda?
+        lambda = (l+r)/2;
+        if(lambda==0){
+            lambda=1; num1++;
+            if(num1>20){
+                break;
+            }
+        }
+        auto queryList = generate_queryList(lambda, simulation_time);
+        cout<<"lambda: "<<lambda<<" ; the size of querylist: "<<queryList.size();
+
+        pair<double,double> result = simulator_UpdateFirst(query_costs, update_costs, queryList, simulation_time, period_time);
+//        pair<double,double> result = simulator_UpdateFirst(simulated_query_costs, simulated_update_costs, queryList, simulation_time, period_time);
+        if(result.second <= threshold_time){
+            if(throughput < result.first) {
+//                cout<<"here:" << result.first<<endl;
+                throughput=result.first;
+
+                cout<<" ; throughput: "<<result.first<< " ; response query time: "<< result.second*1000 <<" ms";
+            }
+            l = lambda + gap;
+//            l=l*1.1;
+        }else{
+            r = lambda - gap;
+//            r=r/1.1;
+        }
+        cout<<endl;
+    }
+
+    tt.stop();
+    cout<<"Time for throughput simulation: "<<tt.GetRuntime()<<" s"<<endl;
+    return throughput;
+
+}
+
+double Graph::ThroughputSimulate(vector<vector<double>> & query_costs, vector<vector<double>>& update_costs, int simulation_time, double threshold_time, double period_time, double queryTime, int workerNum){//period_time is update interval time, simulation_time is the overall time for simulation
+    Timer tt;
+    tt.start();
+    double l = 0, r = 2000000; // be careful of 'r'
+    double throughput = 0.0;
+    int lambda;
+    int gap=1;
+
+    r*=workerNum;
+
+    if(r>workerNum*10/queryTime){
+        r=workerNum*10/queryTime;
+    }
+
+    cout<<"Simulate the throughput of system... r: "<<r<<" ; gap: "<<gap<<" ; worker number: "<< workerNum<<endl;
+    while(l < r){//why use different lambda?
+        lambda = (l+r)/2;
+        if(lambda==0){
+            lambda=1;
+        }
+        auto queryList = generate_queryList(lambda, simulation_time);
+        cout<<"lambda: "<<lambda<<" ; the size of querylist: "<<queryList.size();
+
+//        pair<double,double> result = simulator_UpdateFirst(query_costs, update_costs, queryList, simulation_time, period_time);
+        pair<double,double> result = simulator_UpdateFirst(query_costs, update_costs, queryList, simulation_time, period_time, workerNum);
+
+//        pair<double,double> result = simulator_UpdateFirst(simulated_query_costs, simulated_update_costs, queryList, simulation_time, period_time);
+        if(result.second <= threshold_time){
+            if(throughput < result.first) {
+//                cout<<"here:" << result.first<<endl;
+                throughput=result.first;
+
+                cout<<" ; throughput: "<<result.first<< " ; response query time: "<< result.second*1000 <<" ms";
+            }
+            l = lambda + gap;
+//            l=l*1.1;
+        }else{
+            r = lambda - gap;
+//            r=r/1.1;
+        }
+        cout<<endl;
+    }
+
+    tt.stop();
+    cout<<"Time for throughput simulation: "<<tt.GetRuntime()<<" s"<<endl;
+    return throughput;
+
+}
+
+//update first model
+pair<double, double> Graph::simulator_UpdateFirst(vector<vector<double>> & query_cost, vector<vector<double>> & update_cost, vector<query> &queryList, int T, double period_time){
+    int total_time; // terminal time for each period
+    unsigned long long int count = 0; // the number of queries processed.
+
+    double avg_response_time = 0.0;
+    query* current_query;
+
+    double c_time=0;  // current time for processing queries
+
+//    T = T*microsecs_per_sec; // transform T to microseconds
+    int num_updates = T/period_time;//number of batch updates
+//    cout<<"batch number: "<<num_updates<<endl;
+    int current_update_index=0;
+
+
+    bool finished = false;
+
+    int query_processed_in_one_update_slot = 0;
+
+    double update_time_rest;
+
+
+    while(current_update_index * period_time < T){
+
+//        cout<<"batch "<<current_update_index<<endl;
+
+        c_time = period_time * current_update_index;  // + batch_update_costs[current_update_index%batch_update_costs.size()];
+        double durationPoint=c_time;
+        // start from c_time, end at total_time
+        total_time = min((int)period_time * (current_update_index+1), T);
+        query_processed_in_one_update_slot = 0;
+        for(int i=0;i<query_cost.size();++i){
+            update_time_rest = update_cost[i][current_update_index % update_cost.size()];//update time
+//                cout<<"Duration of Q-Stage "<<i<<" : "<<update_time_rest<< " s"<<endl;
+            c_time=durationPoint;
+            if(update_time_rest==0)
+                continue;
+
+            durationPoint+=update_time_rest;
+            while(c_time <= durationPoint) {//if there is remained time for querying
+                if( count < queryList.size()) {
+                    current_query = &queryList[count];
+                }else {//if all queries are processed
+                    finished = true;
+//                    cout<<"!!! Finished the processing of all queries."<<endl;
+                    break;
+                }
+//            cout<<"query "<<count<<": "<<current_query->init_time<<" "<<current_query->process_time<<" ";
+                current_query->process_time = query_cost[i][query_processed_in_one_update_slot % query_cost[i].size()];//obtain the true query processing time
+//            cout<<current_query->process_time<<endl;
+
+                if (current_query->init_time> c_time){
+                    c_time = current_query->init_time;
+                }
+
+                //c_time = max(c_time, current_query->init_time*1000000.0);
+                if(c_time + current_query->process_time <= durationPoint) {
+                    count++;
+                    query_processed_in_one_update_slot++;
+                    avg_response_time +=  (c_time -  current_query->init_time + current_query->process_time);//obtain the query response time
+//                simulated_query_costs.push_back(current_query->process_time);
+                    c_time += current_query->process_time;
+                } else {//if the remained time is not enough for query processing
+                    current_query->process_time = current_query->process_time - (durationPoint - c_time);
+                    break;
+                }
+            }
+
+        }
+        if(finished) break;
+//        if(c_time+1<total_time){
+//            cout<<"Seems wrong. "<<c_time<<" "<<total_time<<" s"<<endl; exit(1);
+//        }
+        current_update_index++;
+    }
+
+
+    //cout<<"Avg_response_time " << avg_response_time / count / 1000000 <<endl;
+    return make_pair(count * 1.0 / T, avg_response_time / count);//return throughput (query per second) and average response time (in us)
+}
+
+
+pair<double, double> Graph::simulator_UpdateFirst(vector<vector<double>> & query_cost, vector<vector<double>> & update_cost, vector<query> &queryList, int T, double period_time, int workerNum){
+    int total_time; // terminal time for each period
+    unsigned long long int count = 0; // the number of queries processed.
+
+    double avg_response_time = 0.0;
+    query* current_query;
+
+    double c_time=0;  // current time for processing queries
+
+//    T = T*microsecs_per_sec; // transform T to microseconds
+    int num_updates = T/period_time;//number of batch updates
+//    cout<<"batch number: "<<num_updates<<endl;
+    int current_update_index=0;
+
+
+    bool finished = false;
+
+    int query_processed_in_one_update_slot = 0;
+
+    double update_time_rest;
+
+    if(workerNum>1){//with multiple workers
+        benchmark::heap<2, int, long long int> pqueue(workerNum);
+        int topID; long long int topValue;
+        vector<double> workers(workerNum,0.0);
+        vector<double> c_times(workerNum,0.0);
+        pair<double, int> minT;
+        while(current_update_index * period_time < T){
+//        cout<<"batch "<<current_update_index<<endl;
+            c_time = period_time * current_update_index;  // + batch_update_costs[current_update_index%batch_update_costs.size()];
+            double durationPoint=c_time;
+            // start from c_time, end at total_time
+            total_time = min((int)period_time * (current_update_index+1), T);
+            query_processed_in_one_update_slot = 0;
+            for(int i=0;i<query_cost.size();++i){
+                update_time_rest = update_cost[i][current_update_index % update_cost.size()];//update time
+//                cout<<"Duration of Q-Stage "<<i<<" : "<<update_time_rest<< " s"<<endl;
+                c_time=durationPoint;
+                for(int wi=0;wi<c_times.size();++wi){
+                    c_times[wi]=c_time;
+                    pqueue.update(wi,c_time*Resolution);
+                }
+                if(update_time_rest==0)
+                    continue;
+
+                durationPoint+=update_time_rest;
+                while(c_time <= durationPoint && !pqueue.empty()) {//if there is remained time for querying
+
+                    pqueue.extract_min(topID, topValue);
+                    c_time=c_times[topID];
+                    if( count < queryList.size()) {
+                        current_query = &queryList[count];
+                    }else {//if all queries are processed
+                        finished = true;
+//                    cout<<"!!! Finished the processing of all queries."<<endl;
+                        break;
+                    }
+
+                    current_query->process_time = query_cost[i][query_processed_in_one_update_slot % query_cost[i].size()];//obtain the true query processing time
+                    if (current_query->init_time> c_times[topID]){
+                        c_times[topID] = current_query->init_time;
+                    }
+
+                    //c_time = max(c_time, current_query->init_time*1000000.0);
+                    if(c_times[topID] + current_query->process_time <= durationPoint) {
+                        count++;
+                        query_processed_in_one_update_slot++;
+                        avg_response_time +=  (c_times[topID] -  current_query->init_time + current_query->process_time);//obtain the query response time
+//                simulated_query_costs.push_back(current_query->process_time);
+                        c_times[topID] += current_query->process_time;
+                        pqueue.update(topID,c_times[topID]*Resolution);
+                    } else {//if the remained time is not enough for query processing
+                        current_query->process_time = current_query->process_time - (durationPoint - c_time);
+                        c_times[topID] += current_query->process_time;
+                        break;
+                    }
+                    if(!pqueue.empty()){
+                        c_time=c_times[pqueue.top_id()];
+                    }else{
+                        break;
+                    }
+
+
+                }
+
+            }
+            if(finished) break;
+//        if(c_time+1<total_time){
+//            cout<<"Seems wrong. "<<c_time<<" "<<total_time<<" s"<<endl; exit(1);
+//        }
+            current_update_index++;
+        }
+    }
+    else{//single worker
+        while(current_update_index * period_time < T){
+//        cout<<"batch "<<current_update_index<<endl;
+            c_time = period_time * current_update_index;  // + batch_update_costs[current_update_index%batch_update_costs.size()];
+            double durationPoint=c_time;
+            // start from c_time, end at total_time
+            total_time = min((int)period_time * (current_update_index+1), T);
+            query_processed_in_one_update_slot = 0;
+            for(int i=0;i<query_cost.size();++i){
+                update_time_rest = update_cost[i][current_update_index % update_cost.size()];//update time
+//                cout<<"Duration of Q-Stage "<<i<<" : "<<update_time_rest<< " s"<<endl;
+                c_time=durationPoint;
+                if(update_time_rest==0)
+                    continue;
+
+                durationPoint+=update_time_rest;
+                while(c_time <= durationPoint) {//if there is remained time for querying
+                    if( count < queryList.size()) {
+                        current_query = &queryList[count];
+                    }else {//if all queries are processed
+                        finished = true;
+//                    cout<<"!!! Finished the processing of all queries."<<endl;
+                        break;
+                    }
+//            cout<<"query "<<count<<": "<<current_query->init_time<<" "<<current_query->process_time<<" ";
+                    current_query->process_time = query_cost[i][query_processed_in_one_update_slot % query_cost[i].size()];//obtain the true query processing time
+//            cout<<current_query->process_time<<endl;
+
+                    if (current_query->init_time> c_time){
+                        c_time = current_query->init_time;
+                    }
+
+                    //c_time = max(c_time, current_query->init_time*1000000.0);
+                    if(c_time + current_query->process_time <= durationPoint) {
+                        count++;
+                        query_processed_in_one_update_slot++;
+                        avg_response_time +=  (c_time -  current_query->init_time + current_query->process_time);//obtain the query response time
+//                simulated_query_costs.push_back(current_query->process_time);
+                        c_time += current_query->process_time;
+                    } else {//if the remained time is not enough for query processing
+                        current_query->process_time = current_query->process_time - (durationPoint - c_time);
+                        break;
+                    }
+                }
+
+            }
+            if(finished) break;
+//        if(c_time+1<total_time){
+//            cout<<"Seems wrong. "<<c_time<<" "<<total_time<<" s"<<endl; exit(1);
+//        }
+            current_update_index++;
+        }
+    }
+
+
+
+
+    //cout<<"Avg_response_time " << avg_response_time / count / 1000000 <<endl;
+    return make_pair(count * 1.0 / T, avg_response_time / count);//return throughput (query per second) and average response time (in us)
+}
+
 /// CHWP algorithm
 void Graph::IndexMaintenanceCHWP(int updateType, int updateSize, bool ifBatch, int batchSize) {
     cout<<"Index update test..."<<endl;

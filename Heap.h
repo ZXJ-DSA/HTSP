@@ -156,7 +156,7 @@ namespace benchmark {
 
         }
 
-        inline node_t top_value() {//get the value, i.e. id number of minimal cost
+        inline node_t top_id() {//get the value, i.e. id number of minimal cost
 
             assert(!empty());
 
@@ -297,3 +297,4 @@ namespace benchmark {
         std::vector<node_t> position;
     };
 }
+

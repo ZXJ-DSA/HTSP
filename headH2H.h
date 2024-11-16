@@ -25,9 +25,10 @@
 #include <chrono>
 #include <string>
 #include "Heap.h"
-#include <omp.h>
+//#include <omp.h>
 
 #define INF 99999999
+#define Resolution 10000000
 //typedef unsigned int vertex;
 typedef int vertex;
 
@@ -144,6 +145,16 @@ struct Node{//tree node
 	}
 };
 
+/// Throughput related function and data structure
+struct query{
+    double init_time=0; // in seconds, time of arrival
+    double process_time=0;  // in seconds, query processing time
+    query(double initT, double processT) {
+        init_time = initT;
+        process_time = processT;//query processing time
+    }
+};
+
 class Graph{
 public:
     string sourcePath;
@@ -238,7 +249,8 @@ public:
     int QueryH2H(int ID1,int ID2);
     int LCAQuery(int _p, int _q);
     //Dijkstra
-    int Dijkstra(int ID1, int ID2,vector<vector<pair<vertex,int>>> &Neighbor);
+    int Dijkstra(int ID1, int ID2, vector<vector<pair<vertex,int>>> &Neighbor);
+    int BiDijkstra(int ID1, int ID2, vector<vector<pair<vertex,int>>> &Neighbor);
     void RetrievePath(int ID1, int ID2, vector<int> & prece);
 
     //// For throughput test
@@ -246,6 +258,79 @@ public:
     unsigned long long EffiCheckThroughput(vector<pair<int,int>>& ODpair, Timer& tRecord, int batchInterval);
     void RealUpdateThroughputTest(string updateFile);
     void RandomUpdateThroughputTest(string updateFile, int batchNum, int batchSize, int batchInterval);
+    void RandomUpdateThroughputTestQueueModel(int batchNum, int batchSize, int batchInterval, double T_r, int workerNum);
+
+    double EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<vector<double>> & queryTimes);
+    vector<double> StageDurationCompute(int intervalT, double updateTime);
+    pair<double,double> ThroughputEstimate(vector<vector<double>> &query_costs, vector<vector<double>> &update_costs, double threshold_time, double T);
+    double ThroughputSimulate(vector<vector<double>> & query_costs, vector<vector<double>>& update_costs, int simulation_time, double threshold_time, double period_time, double queryTime);
+    double ThroughputSimulate(vector<vector<double>> & query_costs, vector<vector<double>>& update_costs, int simulation_time, double threshold_time, double period_time, double queryTime, int workerNum);
+    pair<double, double> simulator_UpdateFirst(vector<vector<double>> & query_cost, vector<vector<double>> & update_cost, vector<query> &queryList, int T, double period_time);
+    pair<double, double> simulator_UpdateFirst(vector<vector<double>> & query_cost, vector<vector<double>> & update_cost, vector<query> &queryList, int T, double period_time, int workerNum);
+    double analytical_update_first(double T_q, double T_u, double T_r, double T, double V_q);
+
+    float nextTime(double rateParameter) {
+        return -log(1.0f - (double) rand() / (RAND_MAX + 1.0)) / rateParameter;
+    }
+/// poisson process
+    std::vector<double> poisson(double lambda, int T) {// T: seconds
+        std::vector<double> sequence;
+        double t=0;
+//    srand(time(NULL));
+        int num=0;
+        while(t < T) {
+            double element = nextTime(lambda);
+            if(t+element < T) {
+                sequence.push_back(t + element);
+                //cout<< t+element<<endl;
+            }
+            t+=element;
+            num++;
+        }
+        return sequence;
+    }
+/// function of generating the queries within the duration of T, fulfilling the poisson distribution
+    std::vector<query> generate_queryList(double lambda, int T) {
+        std::vector<query> list;
+        std::vector<double> sequence = poisson(lambda, T);
+//        std::cout<<"sequence size of poisson process: "<<sequence.size()<<" ; lambda: "<<lambda<<" ; T: "<<T<<std::endl;
+//    std::cout<<"process_time_list size: "<<process_time_list.size()<<std::endl;
+//    int m = process_time_list.size();
+        int n = sequence.size();
+        for(int i=0; i < n; i++) {
+            int id = rand()%n;
+//        query query(sequence[i], process_time_list[i%m]);
+//        list.push_back(query);
+            list.emplace_back(sequence[i],0);
+//            if(i<2 || i>n-2){
+//                std::cout<<i<<": "<<id<<" "<<sequence[i]<<" s"<<std::endl;
+//            }
+        }
+        return list;
+    }
+
+    double get_mean(vector<double>& times) {
+        double mean = 0.0;
+        for (auto val : times) {
+            mean += val;
+        }
+        if(times.size()>0)
+            return mean / times.size();
+        else
+            return 0.0;
+    }
+    double get_var(vector<double>& times) {
+        double mean = get_mean(times);
+        double var = 0.0;
+        for (auto val : times) {
+            var += (val - mean) * (val - mean);
+        }
+        if(times.size()>0)
+            return var / times.size();
+        else
+            return 0.0;
+    }
+
 
     //// For CH Index Maintenance
     void IndexMaintenanceCHWP(int updateType, int updateSize, bool ifBatch, int batchSize);

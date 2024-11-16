@@ -8,25 +8,26 @@
 
 int main(int argc, char** argv){
 
-    if( argc < 4 || argc > 18){//
+    if( argc < 4 || argc > 19){//
         printf("usage:\n<arg1> source path, e.g. /export/project/xzhouby\n");
         printf("<arg2> name of dataset, e.g. NY\n");
 //        printf("<arg3> HTSP system index, 1: CH+H2H; 2: PH2H; 3: PCH+PH2H; 4: Optimized PCH+PH2H; 5: PostMHL. default: 2\n");
         printf("<arg3> HTSP system index, 1: CH+H2H; 3: PCH+PH2H; 5: PostMHL. default: 5\n");
-        printf("<arg4> (optional) partition number, e.g. 64\n");
-        printf("<arg5> (optional) partition method, (NC: PUNCH; MT: METIS), default: NC\n");
-        printf("<arg6> (optional) query strategy, (0:A*; 1: PCH (CH); 2: No-boundary; 3: Post-boundary; 4: Cross-boundary (H2H)), default: 4\n");
-        printf("<arg7> (optional) update type, (0: No Update Test; 1: Decrease; 2: Increase), default: 0\n");
-        printf("<arg8> (optional) whether batch update, (0: No; 1: Yes), default: 1\n");
+        printf("<arg4> (optional) average query response time requirement, in seconds. default: 0.5\n");
+        printf("<arg5> (optional) partition number, e.g. 64\n");
+        printf("<arg6> (optional) partition method, (NC: PUNCH; MT: METIS), default: NC\n");
+        printf("<arg7> (optional) query strategy, (0:A*; 1: PCH (CH); 2: No-boundary; 3: Post-boundary; 4: Cross-boundary (H2H)), default: 4\n");
+        printf("<arg8> (optional) update type, (0: No Update Test; 1: Decrease; 2: Increase), default: 0\n");
         printf("<arg9> (optional) batch number, default: 10\n");
         printf("<arg10> (optional) batch size, default: 10\n");
         printf("<arg11> (optional) batch interval (in seconds), default: 10\n");
         printf("<arg12> (optional) thread number, default: 15\n");
-        printf("<arg13> (optional) same-partition query proportion, -1: random; 0-100: 0-100%,  default: -1 (random)\n");
-        printf("<arg14> (optional) bandwidth, default: 50\n");
-        printf("<arg15> (optional) lower bound ratio, default: 0.1\n");
-        printf("<arg16> (optional) upper bound ratio, default: 2\n");
-        printf("<arg17> (optional) preprocessing task (1: Partitioned MDE Ordering; 2: Partitioned Query Generation)\n");
+        printf("<arg13> (optional) query worker number, default: 15\n");
+        printf("<arg14> (optional) same-partition query proportion, -1: random; 0-100: 0-100%,  default: -1 (random)\n");
+        printf("<arg15> (optional) bandwidth, default: 50\n");
+        printf("<arg16> (optional) lower bound ratio, default: 0.1\n");
+        printf("<arg17> (optional) upper bound ratio, default: 2\n");
+        printf("<arg18> (optional) preprocessing task (1: Partitioned MDE Ordering; 2: Partitioned Query Generation)\n");
 
         exit(0);
     }
@@ -44,13 +45,15 @@ int main(int argc, char** argv){
     batchNum = 2;
     int batchSize = 10;
     int batchInterval = 60;
-    bool ifBatch = false;
+//    bool ifBatch = false;
     int threadNum = 15;
     int preTask=0;
     int bandwidth=50;
     double lowerB=0.1;
     double upperB=2;
     int portion=-1;
+    double T_r=0.5;//average query response time, s
+    int workerNum = 15;
 
     if(argc > 1) {
         cout << "argc: " << argc << endl;
@@ -64,30 +67,30 @@ int main(int argc, char** argv){
         algoChoice = stoi(argv[3]);
 
         if(argc > 4){
-            cout << "argv[4] (Partition Number): " << argv[4] << endl;//partition number
-            partitionNum = stoi(argv[4]);
+            cout << "argv[4] (Query Response Time, s): " << argv[4] << endl;//query response time
+            T_r = stod(argv[4]);
         }
-
         if(argc > 5){
-            cout << "argv[5] (Partition Method): " << argv[5] << endl;//partition method
-            algoParti = argv[5];
-            if(algoParti != "NC" && algoParti != "MT"){
-                cout<<"Wrong partition method! "<<algoParti<<endl; exit(1);
-            }
+            cout << "argv[5] (Partition Number): " << argv[5] << endl;//partition number
+            partitionNum = stoi(argv[5]);
         }
         if(argc > 6){
-            cout << "argv[6] (Query Strategy): " << argv[6] << endl;//algorithm for query
-            algoQuery = stoi(argv[6]);
+            cout << "argv[6] (Partition Method): " << argv[6] << endl;//partition method
+            algoParti = argv[6];
+//            if(algoParti != "NC" && algoParti != "MT"){
+//                cout<<"Wrong partition method! "<<algoParti<<endl; exit(1);
+//            }
+        }
+        if(argc > 7){
+            cout << "argv[7] (Query Strategy): " << argv[7] << endl;//algorithm for query
+            algoQuery = stoi(argv[7]);
         }
 
-        if(argc > 7){
-            cout << "argv[7] (Update Type): " << argv[7] << endl;//update type
-            updateType = stoi(argv[7]);
-        }
         if(argc > 8){
-            cout << "argv[8] (Whether Batch Update): " << argv[8] << endl;//algorithm for update
-            ifBatch = stoi(argv[8]);
+            cout << "argv[8] (Update Type): " << argv[8] << endl;//update type
+            updateType = stoi(argv[8]);
         }
+
         if(argc > 9){
             cout << "argv[9] (Batch Number): " << argv[9] << endl;//batch number
             batchNum = stoi(argv[9]);
@@ -105,25 +108,29 @@ int main(int argc, char** argv){
             threadNum = stoi(argv[12]);
         }
         if(argc > 13){
-            cout << "argv[13] (Same-parti Proportion): " << argv[13] << endl;
-            portion = stoi(argv[13]);
+            cout << "argv[13] (Query worker number): " << argv[13] << endl;
+            workerNum = stoi(argv[13]);
         }
         if(argc > 14){
-            cout << "argv[14] (Bandwidth): " << argv[14] << endl;//bandwidth
-            bandwidth = stoi(argv[14]);
+            cout << "argv[14] (Same-parti Proportion): " << argv[14] << endl;
+            portion = stoi(argv[14]);
         }
         if(argc > 15){
-            cout << "argv[15] (Lower bound ratio): " << argv[15] << endl;//lower bound ratio
-            lowerB = stod(argv[15]);
+            cout << "argv[15] (Bandwidth): " << argv[15] << endl;//bandwidth
+            bandwidth = stoi(argv[15]);
         }
         if(argc > 16){
-            cout << "argv[16] (Upper bound ratio): " << argv[16] << endl;//upper bound ratio
-            upperB = stod(argv[16]);
+            cout << "argv[16] (Lower bound ratio): " << argv[16] << endl;//lower bound ratio
+            lowerB = stod(argv[16]);
+        }
+        if(argc > 17){
+            cout << "argv[17] (Upper bound ratio): " << argv[17] << endl;//upper bound ratio
+            upperB = stod(argv[17]);
         }
 
-        if(argc > 17){
-            cout << "argv[17] (Preprocessing Task): " << argv[17] << endl;//preprocessing task
-            preTask = stoi(argv[17]);
+        if(argc > 18){
+            cout << "argv[18] (Preprocessing Task): " << argv[18] << endl;//preprocessing task
+            preTask = stoi(argv[18]);
         }
 
     }
@@ -173,13 +180,11 @@ int main(int argc, char** argv){
     cout<<"Partition method: "<<g.algoParti<<endl;
     cout<<"Partition number: "<<g.partiNum<<endl;
     cout<<"Thread number: "<<g.threadnum<<endl;
-    if(ifBatch){
-        cout<<"Test for batch update! Batch size: "<<batchSize<<endl;
-
-    }else{
-        cout<<"Test for single-edge update!"<<endl;
-        batchSize=1;
+    cout<<"Batch size: "<<batchSize<<endl;
+    if(workerNum>threadNum){
+        workerNum=threadNum;
     }
+    cout<<"Query worker number: "<<workerNum<<endl;
 
     if(preTask==1){
 //        g.PH2HVertexOrdering(0);//MDE ordering
@@ -199,8 +204,8 @@ int main(int argc, char** argv){
 //    g.WriteCTIndex(graphfile);
 
     ///Task 2: Query processing
-    g.CorrectnessCheck(100);
-    g.EffiCheck(ODfile,runtimes);//query efficiency test
+//    g.CorrectnessCheck(100);
+//    g.EffiCheck(ODfile,runtimes);//query efficiency test
 //    g.EffiCheck(ODfile+"Parti",runtimes);//query efficiency test
 //    g.EffiCheck(ODfile+"SameParti",runtimes);
 //    g.EffiCheck(ODfile+"CrossParti",runtimes);
@@ -218,14 +223,15 @@ int main(int argc, char** argv){
 //    g.MHLIndexCompareCH(g.sourcePath+dataset+".CHIndex0");
 //    exit(0);
     ///Task 3: Index update
-    if(dataset=="beijing" || dataset=="Guangdong" || dataset=="Test2"){//real-life updates
-        g.RealUpdateThroughputTest(sourcePath+dataset+"_20160105.updates");
-    }else{
-        g.RandomUpdateThroughputTest(sourcePath+dataset+".update", batchNum, batchSize, batchInterval);
+//    if(dataset=="beijing" || dataset=="Guangdong" || dataset=="Test2"){//real-life updates
+//        g.RealUpdateThroughputTest(sourcePath+dataset+"_20160105.updates");
+//    }else{
+        g.RandomUpdateThroughputTestQueueModel(batchNum, batchSize, batchInterval, T_r, workerNum);
+//        g.RandomUpdateThroughputTest(sourcePath+dataset+".update", batchNum, batchSize, batchInterval);
 //        g.SPThroughputTest(updateType, ifBatch, batchNum, batchSize, batchInterval, runtimes);
 //    g.IndexMaintenance(updateType,updateSize, ifBatch, batchSize);//index maintenance
 //    g.IndexMaiEachNntenance(updateFile+"ST",updateType,updateBatch);//same-tree index maintenance
-    }
+//    }
 
 
     tt0.stop();

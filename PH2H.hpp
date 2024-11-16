@@ -1155,7 +1155,12 @@ void Graph::Repair_PartiIndexPostMHLPost(bool ifParallel, bool ifIncrease, map<i
     Timer tt,tt2;
     tt2.start();
     tt.start();
-    BoundShortcutsCheck(true, ifIncrease);// check which partition is affected and update the boundary shortcuts
+    if(threadnum==1){
+        BoundShortcutsCheck(false, ifIncrease);// check which partition is affected and update the boundary shortcuts
+    }else{
+        BoundShortcutsCheck(true, ifIncrease);// check which partition is affected and update the boundary shortcuts
+    }
+
 //    BoundShortcutsCheck(false, ifIncrease);
     tt.stop();
 //    int pid;
@@ -1168,7 +1173,7 @@ void Graph::Repair_PartiIndexPostMHLPost(bool ifParallel, bool ifIncrease, map<i
 //    cout<<"All-pair boundary check time: "<<tt.GetRuntime()<<" s. affectedParti size: "<<affectedParti.size()<<endl;
     tt.start();
     ifRepaired.assign(partiNum, false);
-    if(ifParallel){
+    if(ifParallel && threadnum>1){
         // multi-thread
 //        cout<<"Multi-thread computation!"<<endl;
         //multi-thread
@@ -1189,6 +1194,7 @@ void Graph::Repair_PartiIndexPostMHLPost(bool ifParallel, bool ifIncrease, map<i
             thread.join_all();
         }
         else{//thread number is sufficient
+            cout<<"sufficient thread for post-boundary index update"<<endl;
             boost::thread_group thread;
             for(auto it=affectedParti.begin();it!=affectedParti.end();++it){
                 thread.add_thread(new boost::thread(&Graph::PostMHLIndexUpdatePostPart, this, *it, ifIncrease));
@@ -2188,11 +2194,11 @@ void Graph::RepairPartitionIndexDecrease(int pid, map<int, vector<pair<pair<int,
     }
     if(!weightsParti.empty()){
 //        cout<<"Size of weightsParti of partition "<<pid<<" : "<<weightsParti.size()<<endl;
-        bool ifPost=false;
+        bool ifLabel=false;
         if(algoUpdate>=PH2H_Post){
-            ifPost=true;
+            ifLabel=true;
         }
-        DecreasePartiBatch(pid,weightsParti, NeighborsPartiPost, TreesPost[pid], ranksPost[pid], heightMaxsPost[pid], ifPost);
+        DecreasePartiBatch(pid,weightsParti, NeighborsPartiPost, TreesPost[pid], ranksPost[pid], heightMaxsPost[pid], ifLabel, true);
         ifRepaired[pid]=true;
     }
 
@@ -2347,11 +2353,11 @@ void Graph::RepairPartitionIndexIncrease(int pid, map<int, vector<pair<pair<int,
 
     if(!weightsParti.empty()){
 //        cout<<"Size of weightsParti of partition "<<pid<<" : "<<weightsParti.size()<<endl;
-        bool ifPost=false;
+        bool ifLabel=false;
         if(algoUpdate>=PH2H_Post){
-            ifPost=true;
+            ifLabel=true;
         }
-        IncreasePartiBatch(pid, weightsParti, NeighborsPartiPost, TreesPost[pid], ranksPost[pid], heightMaxsPost[pid],SCconNodesMTPost,VidtoTNidPost, ifPost);
+        IncreasePartiBatch(pid, weightsParti, NeighborsPartiPost, TreesPost[pid], ranksPost[pid], heightMaxsPost[pid],SCconNodesMTPost,VidtoTNidPost, ifLabel, true);
         ifRepaired[pid]=true;
     }
 
@@ -2710,6 +2716,7 @@ void Graph::makeTreeIndexExtDFS(int ID, vector<int> &list){
             ifCoexist=true;
             continue;
         }
+        //if not boundary vertex
         if(children.find(Trees[PID][tempRank].uniqueVertex) == children.end()){
             children.insert(Trees[PID][tempRank].uniqueVertex);
 //            if(ifCoexist){
@@ -2756,23 +2763,30 @@ void Graph::makeTreeIndexExtDFS(int ID, vector<int> &list){
         for(int i=0;i<list.size();++i){
             ancestor = list[i];
             dis=INF;
-            for(int j=0;j<Tree[rank[ID]].vert.size();++j){
-                neighbor = Tree[rank[ID]].vert[j].first;
-                d1=Tree[rank[ID]].vert[j].second.first;
-//                if(TreeExt[rankExt[neighbor]].dis.size()<list.size()){
-//                    cout<<ID<<": "<<neighbor<<"("<<NodeOrder[neighbor]<<","<<PartiTag[neighbor].first<<","<<PartiTag[neighbor].second<<") "<<TreeExt[rankExt[neighbor]].dis.size()<<" "<<list.size()<<endl;
+//            for(int j=0;j<Tree[rank[ID]].vert.size();++j){
+//                neighbor = Tree[rank[ID]].vert[j].first;
+//                d1=Tree[rank[ID]].vert[j].second.first;
+////                if(TreeExt[rankExt[neighbor]].dis.size()<list.size()){
+////                    cout<<ID<<": "<<neighbor<<"("<<NodeOrder[neighbor]<<","<<PartiTag[neighbor].first<<","<<PartiTag[neighbor].second<<") "<<TreeExt[rankExt[neighbor]].dis.size()<<" "<<list.size()<<endl;
+////                }
+//                if(TreeExt[rankExt[neighbor]].height<TreeExt[rankExt[ancestor]].height){//if neighbor is ancestor of ancestor
+////                    d2= QueryCore(neighbor,ancestor);
+//                    d2=TreeExt[rankExt[ancestor]].dis[TreeExt[rankExt[neighbor]].height-1];;
+//                }else{
+//                    d2=TreeExt[rankExt[neighbor]].dis[i];
 //                }
-                if(TreeExt[rankExt[neighbor]].height<TreeExt[rankExt[ancestor]].height){//if neighbor is ancestor of ancestor
-//                    d2= QueryCore(neighbor,ancestor);
-                    d2=TreeExt[rankExt[ancestor]].dis[TreeExt[rankExt[neighbor]].height-1];;
-                }else{
-                    d2=TreeExt[rankExt[neighbor]].dis[i];
-                }
-
-                if(dis>d1+d2){
-                    dis=d1+d2;
-                }
+//
+//                if(dis>d1+d2){
+//                    dis=d1+d2;
+//                }
+//            }
+//            if(dis!=Tree[rank[ID]].dis[i]){
+//                cout<<"Inconsistent between overlay and cross-boundary tree. "<<ID<<" "<<Tree[rank[ID]].dis[i]<<" "<<dis<<endl;
+//            }
+            if(Tree[rank[ID]].dis.size()<=i){
+                cout<<"Wrong. "<<i<<" "<< Tree[rank[ID]].dis.size()<< endl; exit(1);
             }
+            dis=Tree[rank[ID]].dis[i];//new
             TreeExt[p].dis.push_back(dis);
 //            int disD= Dijkstra(ancestor,ID,Neighbor);
 //            if(disD!=dis){
@@ -2824,7 +2838,7 @@ void Graph::makeTreeIndexExtDFS(int ID, vector<int> &list){
     TreeExt[p].dis.push_back(0);
     TreeExt[p].cnt.push_back(ID);
 
-    list.push_back(TreeExt[p].uniqueVertex);
+    list.push_back(TreeExt[p].uniqueVertex);//vertex ID
     for(int i=0;i<TreeExt[p].ch.size();i++){
         makeTreeIndexExtDFS(TreeExt[TreeExt[p].ch[i]].uniqueVertex,list);
     }
@@ -2980,7 +2994,7 @@ void Graph::ConstructExtensionLabelParti(int pid){
     }
 }
 //Top down mechanism
-void Graph::RefreshExtensionLabelsNoAllPair(map<int, vector<pair<pair<int, int>, pair<int, int>>>> & partiBatch){
+void Graph::RefreshExtensionLabelsNoAllPair(map<int, vector<pair<pair<int, int>, pair<int, int>>>> & partiBatch, bool ifParallel){
 //    updated.assign(node_num, false);
 //    cout<<"Top-down extension label update!"<<endl;
     int bid;
@@ -3038,7 +3052,7 @@ void Graph::RefreshExtensionLabelsNoAllPair(map<int, vector<pair<pair<int, int>,
 //    cout<<"rootsFinal size: "<<rootsFinal.size()<<endl;
 
 
-    bool ifParallel=true;
+//    bool ifParallel=true;
 //    ifParallel=false;
 
     if(ifParallel){//multi-thread
@@ -3129,7 +3143,7 @@ void Graph::RefreshExtensionLabelsNoAllPair(map<int, vector<pair<pair<int, int>,
 
 }*/
 
-void Graph::RefreshExtensionLabelsPostMHL(bool ifParallel, bool ifIncrease, double & runT){
+void Graph::RefreshExtensionLabelsPostMHL(bool ifParallel, bool ifIncrease, double & runT, int threadNum){
 //    updated.assign(node_num, false);
     Timer tt;
     tt.start();
@@ -3148,11 +3162,14 @@ void Graph::RefreshExtensionLabelsPostMHL(bool ifParallel, bool ifIncrease, doub
 //    }
 //    cout<<endl;
 
+//    if(threadnum-affectedParti.size()<=1){
+//        ifParallel=false;
+//    }
     if(ifParallel){//multi-thread
 //        cout<<"Multi-thread computation."<<endl;
-        if(threadnum<vParti.size()){
+        if(threadNum<vParti.size()){
             vector<vector<int>> processID;
-            processID.assign(threadnum, vector<int>());
+            processID.assign(threadNum, vector<int>());
             ThreadDistribute(vParti, processID);
 //            cout<<"Batch number: "<<processID[0].size()<<endl;
             if(ifIncrease){
@@ -3171,6 +3188,7 @@ void Graph::RefreshExtensionLabelsPostMHL(bool ifParallel, bool ifIncrease, doub
 
         }
         else{//thread number is sufficient
+            cout<<"sufficient thread for cross-boundary index update "<<vParti.size()+affectedParti.size()<<" "<<threadnum<<endl;
             if(ifIncrease){
                 boost::thread_group thread;
                 for(auto j=0;j<vParti.size();++j){
@@ -4717,6 +4735,7 @@ void Graph::H2HCreateTree_Overlay() {
     rank.assign(node_num,-1);
 
     bool flagAdd = true;
+    treewidth=0;
     for(int id=OverlayVertex.size()-1;id>=0;--id){
         ID = OverlayVertex[id];
 //        cout<<ID<<" "<<NodeOrder[ID]<<endl;
@@ -4729,7 +4748,9 @@ void Graph::H2HCreateTree_Overlay() {
             }
         }
         NeighborCon[ID].assign(Neigh.begin(),Neigh.end());
-
+        if(treewidth<Neigh.size()){
+            treewidth=Neigh.size();
+        }
         existCore[ID]=false;
         //delete the star
         for(int i=0;i<Neigh.size();i++){
@@ -4848,7 +4869,7 @@ void Graph::H2HCreateTree_Overlay() {
     /// LCA index
     makeRMQCore();//build LCA index
 
-    cout<<"Overlay graph! Tree node number: "<<Tree.size()<<" ; Tree height: "<< heightMax<<endl;
+    cout<<"Overlay graph! Tree node number: "<<Tree.size()<<" ; Tree height: "<< heightMax<<" ; Treewidth: "<<treewidth<< endl;
 }
 
 void Graph::NeighborComorderH2H(vector<pair<int,pair<int,int>>> &Neighvec, pair<int,int> p, int x){
@@ -8287,7 +8308,13 @@ void Graph::DecreaseParti(int a,int b, int newW, vector<vector<pair<int,int>>> &
 
 void Graph::EachNodeProBDis5Parti(int child,vector<int>& line,set<int>& vertexIDChL, vector<Node> &Tree, vector<int> &rank){
     bool ProIDdisCha=false;
+    if(child>=Tree.size()){
+        cout<<"!!! child is larger than Tree.size. "<<child<<" "<<Tree.size()<<endl; exit(1);
+    }
     int childID=Tree[child].uniqueVertex;
+//    if(PartiTag[childID].first==9){
+//        cout<<childID<<" "<<Tree[child].height<<" "<<child<<" "<<Tree.size()<< endl;
+//    }
     int bHeight=BoundVertex[PartiTag[childID].first].size();
     vector<int> cntNew(line.size(),0);
     vector<bool> flagUpdate(line.size(),false);
@@ -9389,7 +9416,8 @@ void Graph::DecreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>
             int rnew=rank[IDMap[ProID]],r;
             for(int i=0;i<ProBeginVertexSetParti[pid].size();i++){
                 r=rank[IDMap[ProBeginVertexSetParti[pid][i]]];
-                if(LCAQueryOverlay(rnew,r)!=rnew){
+//                if(LCAQueryOverlay(rnew,r)!=rnew){
+                if(LCAQueryPartition(rnew,r,pid)!=rnew){
                     ProBeginVertexSetNew.push_back(ProBeginVertexSetParti[pid][i]);
                 }
             }
@@ -9584,7 +9612,8 @@ void Graph::DecreasePartiBatchForOpt(int pid, vector<pair<pair<int,int>,pair<int
             int rnew=rank[IDMap[ProID]],r;
             for(int i=0;i<ProBeginVertexSetParti[pid].size();i++){
                 r=rank[IDMap[ProBeginVertexSetParti[pid][i]]];
-                if(LCAQueryOverlay(rnew,r)!=rnew){
+//                if(LCAQueryOverlay(rnew,r)!=rnew){
+                if(LCAQueryPartition(rnew,r,pid)!=rnew){
                     ProBeginVertexSetNew.push_back(ProBeginVertexSetParti[pid][i]);
                 }
             }
@@ -9611,6 +9640,13 @@ void Graph::DecreasePartiBatchForOpt(int pid, vector<pair<pair<int,int>,pair<int
     }
 
     //return checkedDis.size();
+}
+
+void Graph::DecreasePartiBatchPostMHLShortcutV(vector<int> p, map<int,vector<pair<pair<int,int>,pair<int,int>>>>& wBatch, vector<Node> &Tree, vector<int> &rank, int heightMax, vector<vector<pair<pair<int,int>,int>>>& updatedSCs){
+    for(int i=0;i<p.size();++i){
+        int pid=p[i];
+        DecreasePartiBatchPostMHLShortcut(pid, wBatch[pid], Tree, rank, heightMax, updatedSCs[pid]);
+    }
 }
 
 void Graph::DecreasePartiBatchPostMHLShortcut(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<Node> &Tree, vector<int> &rank, int heightMax, vector<pair<pair<int,int>,int>>& updatedSC){
@@ -10530,10 +10566,20 @@ void Graph::InterfacePropagateParallel(pair<int,int> pRange, vector<int>& pids, 
     }
 }
 
+void Graph::DecreasePartiBatchLabelV(vector<int> p, vector<vector<Node>> &Trees, vector<vector<int>> &ranks, vector<int> &heightMaxs, vector<vector<int>> &ProBeginVertexSets, vector<set<int>>& vertexIDChLs){
+    for(int i=0;i<p.size();++i){
+        int pid=p[i];
+        DecreasePartiBatchLabel(Trees[pid], ranks[pid], heightMaxs[pid], ProBeginVertexSets[pid], vertexIDChLs[pid]);
+    }
+}
+
 void Graph::DecreasePartiBatchLabel(vector<Node> &Tree, vector<int> &rank, int heightMax, vector<int>& ProBeginVertexSet, set<int>& vertexIDChL){
     int ProBeginVertexID;
     for(int i=0;i<ProBeginVertexSet.size();i++){
         ProBeginVertexID=ProBeginVertexSet[i];
+//        if(PartiTag[ProBeginVertexID].first==9){
+//            cout<<ProBeginVertexID<<" "<<Tree[rank[IDMap[ProBeginVertexID]]].height<<" "<<ProBeginVertexSet.size()<<endl;
+//        }
         vector<int> linee; //linee.clear();
         linee.reserve(heightMax);
         int pachidd=Tree[Tree[rank[IDMap[ProBeginVertexID]]].pa].uniqueVertex;
@@ -10547,7 +10593,7 @@ void Graph::DecreasePartiBatchLabel(vector<Node> &Tree, vector<int> &rank, int h
 }
 
 //batch update for partition graph
-void Graph::DecreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<unordered_map<int,int>>& Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax, bool ifLabelU){
+void Graph::DecreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<unordered_map<int,int>>& Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax, bool ifLabelU, bool ifPost){
     map<int,int> checkedDis;
 
     for(int i=0;i<Tree.size();i++){
@@ -10684,9 +10730,17 @@ void Graph::DecreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>
             int rnew=rank[IDMap[ProID]],r;
             for(int i=0;i<ProBeginVertexSetParti[pid].size();i++){
                 r=rank[IDMap[ProBeginVertexSetParti[pid][i]]];
-                if(LCAQueryOverlay(rnew,r)!=rnew){
-                    ProBeginVertexSetNew.push_back(ProBeginVertexSetParti[pid][i]);
+//                if(LCAQueryOverlay(rnew,r)!=rnew){//?
+                if(ifPost){
+                    if(LCAQueryPartitionPost(rnew,r,pid)!=rnew){
+                        ProBeginVertexSetNew.push_back(ProBeginVertexSetParti[pid][i]);
+                    }
+                }else{
+                    if(LCAQueryPartition(rnew,r,pid)!=rnew){
+                        ProBeginVertexSetNew.push_back(ProBeginVertexSetParti[pid][i]);
+                    }
                 }
+
             }
             ProBeginVertexSetParti[pid]=ProBeginVertexSetNew;
         }
@@ -12564,7 +12618,7 @@ void Graph::IncreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>
             int rnew=rank[IDMap[ProID]],r;
             for(int i=0;i<ProBeginVertexSetParti[pid].size();i++){
                 r=rank[IDMap[ProBeginVertexSetParti[pid][i]]];
-                if(LCAQueryOverlay(rnew,r)!=rnew){
+                if(LCAQueryPartition(rnew,r,pid)!=rnew){
                     ProBeginVertexSetNew.push_back(ProBeginVertexSetParti[pid][i]);
                 }
             }
@@ -13702,7 +13756,14 @@ void Graph::IncreasePartiBatchPostMHLShortcut(int pid, vector<pair<pair<int, int
     //return checknum;
 }
 
-void Graph::IncreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<unordered_map<int,int>> &Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax,vector<map<int, vector<pair<int,int>>>> &SCconNodesMT, vector<vector<int>> &VidtoTNid, bool ifLabelU){
+void Graph::IncreasePartiBatchPostMHLShortcutV(vector<int> p, map<int, vector<pair<pair<int, int>, pair<int, int>>>> &wBatch, vector<Node> &Tree, vector<int> &rank, int heightMax, vector<vector<pair<pair<int, int>, int>>> &updatedSCs, vector<int>& PropagateOverlay ){
+    for(int i=0;i<p.size();++i){
+        int pid=p[i];
+        IncreasePartiBatchPostMHLShortcut(pid, wBatch[pid], Tree, rank, heightMax, updatedSCs[pid], PropagateOverlay);
+    }
+}
+
+void Graph::IncreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<unordered_map<int,int>> &Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax,vector<map<int, vector<pair<int,int>>>> &SCconNodesMT, vector<vector<int>> &VidtoTNid, bool ifLabelU, bool ifPost){
     int checknum=0;
     map<pair<int,int>,int> OCdis;//{(s,t),d} (order[s]<order[t]) maintain the old distance before refreshed and avoid search in the adjacent list
     OCdis.clear();
@@ -13910,9 +13971,17 @@ void Graph::IncreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>
             int rnew=rank[IDMap[ProID]],r;
             for(int i=0;i<ProBeginVertexSetParti[pid].size();i++){
                 r=rank[IDMap[ProBeginVertexSetParti[pid][i]]];
-                if(LCAQueryOverlay(rnew,r)!=rnew){
-                    ProBeginVertexSetNew.push_back(ProBeginVertexSetParti[pid][i]);
+//                if(LCAQueryOverlay(rnew,r)!=rnew){//?
+                if(ifPost){
+                    if(LCAQueryPartitionPost(rnew,r,pid)!=rnew){
+                        ProBeginVertexSetNew.push_back(ProBeginVertexSetParti[pid][i]);
+                    }
+                }else{
+                    if(LCAQueryPartition(rnew,r,pid)!=rnew){
+                        ProBeginVertexSetNew.push_back(ProBeginVertexSetParti[pid][i]);
+                    }
                 }
+
             }
             ProBeginVertexSetParti[pid]=ProBeginVertexSetNew;
         }
@@ -13937,6 +14006,13 @@ void Graph::IncreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>
     }
 
     //return checknum;
+}
+
+void Graph::IncreasePartiBatchLabelV(vector<int> p, vector<vector<Node>> &Trees, vector<vector<int>> &ranks, vector<int> &heightMaxs,  vector<vector<int>> &ProBeginVertexSet, vector<vector<int>> &VidtoTNid){
+    for(int i=0;i<p.size();++i){
+        int pid=p[i];
+        IncreasePartiBatchLabel(Trees[pid], ranks[pid], heightMaxs[pid], ProBeginVertexSet[pid], VidtoTNid);
+    }
 }
 
 void Graph::IncreasePartiBatchLabel(vector<Node> &Tree, vector<int> &rank, int heightMax,  vector<int> &ProBeginVertexSet, vector<vector<int>> &VidtoTNid) {

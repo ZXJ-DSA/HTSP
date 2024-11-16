@@ -9,6 +9,12 @@
 
 /// Index Construction
 void Graph::IndexConstruction(){
+    bool flag=false;
+    if(threadnum==1){
+        cout<<"Single thread computation."<<endl;
+        threadnum=40;
+        flag=true;
+    }
     if(algoChoice==1){
         cout<<"System Index: CH + H2H."<<endl;
         HybridSPIndexConstruct();
@@ -29,6 +35,9 @@ void Graph::IndexConstruction(){
     }else if(algoChoice==0){
         cout<<"A* search."<<endl;
         ReadGraph(sourcePath+dataset);//
+    }
+    if(flag==true){
+        threadnum=1;
     }
 }
 //function of hybrid multi-stage SP index construction
@@ -1907,7 +1916,7 @@ void Graph::CorrectnessCheck(int runtimes){
 //        s=191011,t=223004;//MHL
 //        s=35479,t=230427;//MHL
 //        s=54815,t=193672;//MHL
-//        s=48855,t=441;//PMHL
+//        s=8784,t=9502;//PMHL
 //        cout<<"Query "<<i<<": "<<s<<" "<<t<<endl;
 
 //        if(runtimes == 1){
@@ -2237,7 +2246,7 @@ void Graph::EffiCheck(string filename,int runtimes){
     }
 
 
-    cout<<"Average Query Time: "<<(double)runT*1000/runtimes<<" ms. "<<1000*(double)(clock() - start) / (CLOCKS_PER_SEC*runtimes)<<" ms."<<endl;
+    cout<<"Average Query Time: "<<(double)runT*1000/runtimes<<" ms."<<endl;
 }
 
 //function for efficiency test
@@ -2247,6 +2256,7 @@ void Graph::EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int in
     Timer tt;
 
     double runT=0, runT1=0, runT2=0, runT3=0, runT4=0, runT5=0;
+    vector<double> qTime1, qTime2, qTime3, qTime4, qTime5;
     double dt1=0,dt2=0,dt3=0,dt4=0,dt5=0;//actual duration for query stages
     double updateT=0;//overall update time
     unsigned long long qt1=0,qt2=0,qt3=0,qt4=0,qt5=0,qtAll=0;
@@ -2261,9 +2271,9 @@ void Graph::EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int in
     vector<int> results(runtimes,-1);
 
     if(algoChoice==1){
-        runT1=EffiMHLStage(ODpair,1000,Dijk);
-        runT2=EffiMHLStage(ODpair,runtimes/10,CH);
-        runT3=EffiMHLStage(ODpair,runtimes,H2H);
+        runT1=EffiMHLStage(ODpair,1000,Dijk,qTime1);
+        runT2=EffiMHLStage(ODpair,runtimes/10,CH,qTime2);
+        runT3=EffiMHLStage(ODpair,runtimes,H2H,qTime3);
         //Stage 1: Dijkstra
         updateT=stageDurations[Dijk];
         if(updateT<intervalT){
@@ -2297,11 +2307,11 @@ void Graph::EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int in
         stageQueryT[H2H]+=runT3;
     }
     else if(algoChoice==3){
-        runT1=EffiPMHLStage(ODpair,1000,Dijk);
-        runT2=EffiPMHLStage(ODpair,runtimes/10,PCH_No);
-        runT3=EffiPMHLStage(ODpair,runtimes,PH2H_No);
-        runT4=EffiPMHLStage(ODpair,runtimes,PH2H_Post);
-        runT5=EffiPMHLStage(ODpair,runtimes,PH2H_Cross);
+        runT1=EffiPMHLStage(ODpair,1000,Dijk,qTime1);
+        runT2=EffiPMHLStage(ODpair,runtimes/10,PCH_No,qTime2);
+        runT3=EffiPMHLStage(ODpair,runtimes,PH2H_No,qTime3);
+        runT4=EffiPMHLStage(ODpair,runtimes,PH2H_Post,qTime4);
+        runT5=EffiPMHLStage(ODpair,runtimes,PH2H_Cross,qTime5);
         //Stage 1: Dijkstra
         updateT=stageDurations[Dijk];
         if(updateT<intervalT){
@@ -2355,10 +2365,10 @@ void Graph::EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int in
         stageQueryT[PH2H_Cross]+=runT5;
     }
     else if(algoChoice==5){
-        runT1 = EffiPostMHLStage(ODpair,1000,Dijk);
-        runT2 = EffiPostMHLStage(ODpair, runtimes / 10, PCH_No);
-        runT4 = EffiPostMHLStage(ODpair, runtimes, PH2H_Post);
-        runT5 = EffiPostMHLStage(ODpair, runtimes, PH2H_Cross);
+        runT1 = EffiPostMHLStage(ODpair,1000,Dijk,qTime1);
+        runT2 = EffiPostMHLStage(ODpair, runtimes / 10, PCH_No, qTime2);
+        runT4 = EffiPostMHLStage(ODpair, runtimes, PH2H_Post, qTime4);
+        runT5 = EffiPostMHLStage(ODpair, runtimes, PH2H_Cross, qTime5);
         //Stage 1: Dijkstra
         updateT=stageDurations[Dijk];
         if(updateT<intervalT) {
@@ -2405,6 +2415,109 @@ void Graph::EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int in
 
 }
 
+vector<double> Graph::StageDurationCompute(int intervalT){
+//    double dt1=0,dt2=0,dt3=0,dt4=0,dt5=0;//actual duration for query stages
+    vector<double> durations(5,0);
+    double updateT=0;//overall update time
+
+    if(algoChoice==1){
+        //Stage 1: Dijkstra
+        updateT=stageDurations[Dijk];
+        if(updateT<intervalT){
+            durations[Dijk]=stageDurations[Dijk];
+            //Stage 2: CH
+            updateT+=stageDurations[CH];
+            if(updateT<intervalT){
+                durations[CH]=stageDurations[CH];
+                //Stage 3: CH
+                stageDurations[H2H]=intervalT-updateT;
+                durations[H2H]=stageDurations[H2H];
+            }else{
+                durations[CH]=intervalT-stageDurations[Dijk];
+            }
+        }else{
+            durations[Dijk]=intervalT;
+        }
+//        stageUpdateT[Dijk]+=stageDurations[Dijk];
+//        stageUpdateT[CH]+=stageDurations[CH];
+//        stageUpdateT[H2H]+=stageDurations[H2H];
+    }
+    else if(algoChoice==3){
+        //Stage 1: Dijkstra
+        updateT=stageDurations[Dijk];
+        if(updateT<intervalT){
+            durations[Dijk]=stageDurations[Dijk];
+            //Stage 2: PCH
+            updateT+=stageDurations[PCH_No];
+            if(updateT<intervalT){
+                durations[PCH_No]=stageDurations[PCH_No];
+                //Stage 3: No-boundary PMHL
+                updateT+=stageDurations[PH2H_No];
+                if(updateT<intervalT){
+                    durations[PH2H_No]=stageDurations[PH2H_No];
+                    //Stage 4: Post-boundary PMHL
+                    updateT+=stageDurations[PH2H_Post];
+                    if(updateT<intervalT){
+                        durations[PH2H_Post]=stageDurations[PH2H_Post];
+                        //Stage 5: Cross-boundary PMHL
+                        stageDurations[PH2H_Cross]=intervalT-updateT;
+                        durations[PH2H_Cross]=stageDurations[PH2H_Cross];
+                    }else{
+                        durations[PH2H_Post]=intervalT-stageDurations[Dijk]-stageDurations[PCH_No]-stageDurations[PH2H_No];
+                    }
+                }else{
+                    durations[PH2H_No]=intervalT-stageDurations[Dijk]-stageDurations[PCH_No];
+                }
+            }else{
+                durations[PCH_No]=intervalT-stageDurations[Dijk];
+            }
+        }
+        else{
+            durations[Dijk]=intervalT;
+        }
+
+//        stageUpdateT[Dijk]+=stageDurations[Dijk];
+//        stageUpdateT[PCH_No]+=stageDurations[PCH_No];
+//        stageUpdateT[PH2H_No]+=stageDurations[PH2H_No];
+//        stageUpdateT[PH2H_Post]+=stageDurations[PH2H_Post];
+//        stageUpdateT[PH2H_Cross]+=stageDurations[PH2H_Cross];
+    }
+    else if(algoChoice==5){
+        //Stage 1: Dijkstra
+        updateT=stageDurations[Dijk];
+        if(updateT<intervalT) {
+            durations[Dijk]=stageDurations[Dijk];
+            //Stage 2: PCH
+            updateT+=stageDurations[PCH_No];
+            if(updateT<intervalT) {
+                durations[PCH_No]=stageDurations[PCH_No];
+                //Stage 4: Post-boundary PMHL
+                updateT+=stageDurations[PH2H_Post];
+                if(updateT<intervalT) {
+                    durations[PH2H_Post]=stageDurations[PH2H_Post];
+                    //Stage 5: Cross-boundary PMHL
+                    stageDurations[PH2H_Cross]=intervalT-updateT;
+                    durations[PH2H_Cross]=stageDurations[PH2H_Cross];
+                }else{
+                    durations[PH2H_Post]=intervalT-stageDurations[Dijk]-stageDurations[PCH_No];
+                }
+            }else{
+                durations[PCH_No]=intervalT-stageDurations[Dijk];
+            }
+        }else{
+            durations[Dijk]=intervalT;
+        }
+
+//        stageUpdateT[Dijk]+=stageDurations[Dijk];
+//        stageUpdateT[PCH_No]+=stageDurations[PCH_No];
+//        stageUpdateT[PH2H_Post]+=stageDurations[PH2H_Post];
+//        stageUpdateT[PH2H_Cross]+=stageDurations[PH2H_Cross];
+    }else {
+        cout<<"Wrong query type! "<<algoChoice<<endl; exit(1);
+    }
+    return durations;
+}
+
 //function for efficiency test
 void Graph::EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<double> & queryTimes){
     cout<<"Efficiency test. Run times: "<<runtimes<<endl;
@@ -2412,6 +2525,7 @@ void Graph::EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<
     Timer tt;
     tt.start();
     double runT=0, runT1=0, runT2=0, runT3=0, runT4=0, runT5=0;
+    vector<double> qTime1, qTime2, qTime3, qTime4, qTime5;
     double dt1=0,dt2=0,dt3=0,dt4=0,dt5=0;//actual duration for query stages
     double updateT=0;//overall update time
     unsigned long long qt1=0,qt2=0,qt3=0,qt4=0,qt5=0,qtAll=0;
@@ -2426,19 +2540,19 @@ void Graph::EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<
     vector<int> results(runtimes,-1);
 
     if(algoChoice==1){
-        runT1=EffiMHLStage(ODpair,runtimes/100,Dijk);
-        runT2=EffiMHLStage(ODpair,runtimes/10,CH);
-        runT3=EffiMHLStage(ODpair,runtimes,H2H);
+        runT1=EffiMHLStage(ODpair,runtimes/100,Dijk,qTime1);
+        runT2=EffiMHLStage(ODpair,runtimes/10,CH,qTime2);
+        runT3=EffiMHLStage(ODpair,runtimes,H2H,qTime3);
         queryTimes[Dijk]=runT1;
         queryTimes[CH]=runT2;
         queryTimes[H2H]=runT3;
     }
     else if(algoChoice==3){
-        runT1=EffiPMHLStage(ODpair,runtimes/100,Dijk);
-        runT2=EffiPMHLStage(ODpair,runtimes/10,PCH_No);
-        runT3=EffiPMHLStage(ODpair,runtimes,PH2H_No);
-        runT4=EffiPMHLStage(ODpair,runtimes,PH2H_Post);
-        runT5=EffiPMHLStage(ODpair,runtimes,PH2H_Cross);
+        runT1=EffiPMHLStage(ODpair,runtimes/100,Dijk,qTime1);
+        runT2=EffiPMHLStage(ODpair,runtimes/10,PCH_No,qTime2);
+        runT3=EffiPMHLStage(ODpair,runtimes,PH2H_No,qTime3);
+        runT4=EffiPMHLStage(ODpair,runtimes,PH2H_Post,qTime4);
+        runT5=EffiPMHLStage(ODpair,runtimes,PH2H_Cross,qTime5);
         queryTimes[Dijk]=runT1;
         queryTimes[PCH_No]=runT2;
         queryTimes[PH2H_No]=runT3;
@@ -2446,10 +2560,10 @@ void Graph::EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<
         queryTimes[PH2H_Cross]=runT5;
     }
     else if(algoChoice==5){
-        runT1 = EffiPostMHLStage(ODpair,runtimes/100,Dijk);
-        runT2 = EffiPostMHLStage(ODpair, runtimes/10, PCH_No);
-        runT4 = EffiPostMHLStage(ODpair, runtimes, PH2H_Post);
-        runT5 = EffiPostMHLStage(ODpair, runtimes, PH2H_Cross);
+        runT1 = EffiPostMHLStage(ODpair,runtimes/100,Dijk,qTime1);
+        runT2 = EffiPostMHLStage(ODpair, runtimes/10, PCH_No,qTime2);
+        runT4 = EffiPostMHLStage(ODpair, runtimes, PH2H_Post,qTime4);
+        runT5 = EffiPostMHLStage(ODpair, runtimes, PH2H_Cross,qTime5);
         queryTimes[Dijk]=runT1;
         queryTimes[PCH_No]=runT2;
         queryTimes[PH2H_Post]=runT4;
@@ -2459,6 +2573,430 @@ void Graph::EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<
     }
     tt.stop();
     cout<<"Time for efficiency test: "<<tt.GetRuntime()<<" s."<<endl;
+}
+
+//function for efficiency test
+void Graph::EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<vector<double>> & queryTimes){//return in seconds
+    cout<<"Efficiency test. Run times: "<<runtimes<<endl;
+    int s, t;
+    Timer tt;
+    tt.start();
+    double runT=0, runT1=0, runT2=0, runT3=0, runT4=0, runT5=0;
+//    vector<double> qTime1, qTime2, qTime3, qTime4, qTime5;
+    double dt1=0,dt2=0,dt3=0,dt4=0,dt5=0;//actual duration for query stages
+    double updateT=0;//overall update time
+    unsigned long long qt1=0,qt2=0,qt3=0,qt4=0,qt5=0,qtAll=0;
+    int d1,d2;
+    bool ifDebug=false;
+//    ifDebug=true;
+
+    if(ifDebug){
+        cout<<"With correctness check."<<endl;
+    }
+    clock_t start = clock();
+    vector<int> results(runtimes,-1);
+
+    if(algoChoice==1){
+        runT1=EffiMHLStage(ODpair,runtimes/100,Dijk,queryTimes[Dijk]);
+        runT2=EffiMHLStage(ODpair,runtimes/10,CH,queryTimes[CH]);
+        runT5=EffiMHLStage(ODpair,runtimes,H2H,queryTimes[H2H]);
+//        queryTimes[Dijk]=runT1;
+//        queryTimes[CH]=runT2;
+//        queryTimes[H2H]=runT3;
+    }
+    else if(algoChoice==3){
+        runT1=EffiPMHLStage(ODpair,runtimes/100,Dijk,queryTimes[Dijk]);
+        runT2=EffiPMHLStage(ODpair,runtimes/10,PCH_No,queryTimes[PCH_No]);
+        runT3=EffiPMHLStage(ODpair,runtimes,PH2H_No,queryTimes[PH2H_No]);
+        runT4=EffiPMHLStage(ODpair,runtimes,PH2H_Post,queryTimes[PH2H_Post]);
+        runT5=EffiPMHLStage(ODpair,runtimes,PH2H_Cross,queryTimes[PH2H_Cross]);
+//        queryTimes[Dijk]=runT1;
+//        queryTimes[PCH_No]=runT2;
+//        queryTimes[PH2H_No]=runT3;
+//        queryTimes[PH2H_Post]=runT4;
+//        queryTimes[PH2H_Cross]=runT5;
+    }
+    else if(algoChoice==5){
+        runT1 = EffiPostMHLStage(ODpair,runtimes/100,Dijk,queryTimes[Dijk]);
+        runT2 = EffiPostMHLStage(ODpair, runtimes/10, PCH_No,queryTimes[PCH_No]);
+        runT4 = EffiPostMHLStage(ODpair, runtimes, PH2H_Post,queryTimes[PH2H_Post]);
+        runT5 = EffiPostMHLStage(ODpair, runtimes, PH2H_Cross,queryTimes[PH2H_Cross]);
+//        queryTimes[Dijk]=runT1;
+//        queryTimes[PCH_No]=runT2;
+//        queryTimes[PH2H_Post]=runT4;
+//        queryTimes[PH2H_Cross]=runT5;
+    }else {
+        cout<<"Wrong query type! "<<algoChoice<<endl; exit(1);
+    }
+    tt.stop();
+    cout<<"Time for efficiency test: "<<tt.GetRuntime()<<" s."<<endl;
+//    return runT5;
+}
+
+
+
+double Graph::analytical_update_first(double T_q, double T_u, double T_r, double T, double V_q) {//T is duration, T_u is the average update time for one update, return throughput
+//	M/M/1 return min(1.0 / T_q - 1.0 / T_r, 1.0 / T_q - tau * T_u / (T * T_q));
+//	M/G/1
+    if (T_r < T_q)
+        return 0;
+    double a = 2 * (T_r - T_q) / (V_q + 2 * T_r * T_q - T_q * T_q);
+    double lambda_u = T_u / T;
+    double b = (1 - lambda_u) / T_q;
+    double c = a < b ? a : b;
+    if (c < 0) return 0;
+    return c;
+}
+
+// function for estimating the system throughput, old
+//double Graph::ThroughputEstimate(vector<vector<double>> &query_costs, vector<vector<double>> &update_costs, double threshold_time, double T) {
+//    double queryT, duration, queryT_var;
+//    double update_time;
+//    double throughput=0.0;
+//
+//    for(int i=0;i<query_costs.size();++i){
+//        duration = get_mean(update_costs[i]);
+//        if(duration<=0)
+//            continue;
+//        queryT = get_mean(query_costs[i]);
+//        queryT_var = get_var(query_costs[i]);
+//        double tau = duration/T;
+//        double thr = tau*analytical_update_first(queryT, 0, threshold_time/1000,  duration, queryT_var);
+//        cout<<"Throughput of Q-stage "<<i+1<<" : "<<thr<<endl;
+//        throughput+=thr;
+//    }
+//    return throughput;
+//}
+
+// function for estimating the system throughput
+pair<double,double> Graph::ThroughputEstimate(vector<vector<double>> &query_costs, vector<vector<double>> &update_costs, double threshold_time, double T) {
+    double queryT, duration, queryT_var;
+    double update_time=0;
+    double durationT=0;
+    double throughput=0.0;
+    double tau, thr;
+    double query_time=INF;
+//    vector<double> updateT;
+//    updateT.push_back(0);
+
+    for(int i=0;i<query_costs.size();++i){
+        duration = get_mean(update_costs[i]);
+//        updateT.push_back(update_time);
+        if(duration<=0)
+            continue;
+        durationT+=duration;
+        queryT = get_mean(query_costs[i]);
+        queryT_var = get_var(query_costs[i]);
+        tau = duration/T;
+        if(queryT<query_time){
+            query_time=queryT;
+        }
+
+        thr = analytical_update_first(queryT, update_time, threshold_time,  durationT, queryT_var);
+//        cout<<i<<" . update time: "<<update_time<<" s ; estimate duration: "<<durationT<<" s"<<endl;
+        update_time+=duration;
+        cout<<"Throughput of Q-stage "<<i+1<<" : "<<thr<<" ; duration: "<< duration<<" s ; query time: "<<queryT*1000<<" ms"<<endl;
+        throughput+=thr*tau;
+    }
+//    cout<<"Weighted average of throughput: "<<throughput<<endl;
+    return make_pair(throughput,query_time);
+}
+
+//update first model
+pair<double, double> Graph::simulator_UpdateFirst(vector<vector<double>> & query_cost, vector<vector<double>> & update_cost, vector<query> &queryList, int T, double period_time){
+    int total_time; // terminal time for each period
+    unsigned long long int count = 0; // the number of queries processed.
+
+    double avg_response_time = 0.0;
+    query* current_query;
+
+    double c_time=0;  // current time for processing queries
+
+//    T = T*microsecs_per_sec; // transform T to microseconds
+    int num_updates = T/period_time;//number of batch updates
+//    cout<<"batch number: "<<num_updates<<endl;
+    int current_update_index=0;
+
+
+    bool finished = false;
+
+    int query_processed_in_one_update_slot = 0;
+
+    double update_time_rest;
+
+
+    while(current_update_index * period_time < T){
+
+//        cout<<"batch "<<current_update_index<<endl;
+
+        c_time = period_time * current_update_index;  // + batch_update_costs[current_update_index%batch_update_costs.size()];
+        double durationPoint=c_time;
+        // start from c_time, end at total_time
+        total_time = min((int)period_time * (current_update_index+1), T);
+        query_processed_in_one_update_slot = 0;
+        for(int i=0;i<query_cost.size();++i){
+            update_time_rest = update_cost[i][current_update_index % update_cost.size()];//update time
+//                cout<<"Duration of Q-Stage "<<i<<" : "<<update_time_rest<< " s"<<endl;
+            c_time=durationPoint;
+            if(update_time_rest==0)
+                continue;
+
+            durationPoint+=update_time_rest;
+            while(c_time <= durationPoint) {//if there is remained time for querying
+                if( count < queryList.size()) {
+                    current_query = &queryList[count];
+                }else {//if all queries are processed
+                    finished = true;
+//                    cout<<"!!! Finished the processing of all queries."<<endl;
+                    break;
+                }
+//            cout<<"query "<<count<<": "<<current_query->init_time<<" "<<current_query->process_time<<" ";
+                current_query->process_time = query_cost[i][query_processed_in_one_update_slot % query_cost[i].size()];//obtain the true query processing time
+//            cout<<current_query->process_time<<endl;
+
+                if (current_query->init_time> c_time){
+                    c_time = current_query->init_time;
+                }
+
+                //c_time = max(c_time, current_query->init_time*1000000.0);
+                if(c_time + current_query->process_time <= durationPoint) {
+                    count++;
+                    query_processed_in_one_update_slot++;
+                    avg_response_time +=  (c_time -  current_query->init_time + current_query->process_time);//obtain the query response time
+//                simulated_query_costs.push_back(current_query->process_time);
+                    c_time += current_query->process_time;
+                } else {//if the remained time is not enough for query processing
+                    current_query->process_time = current_query->process_time - (durationPoint - c_time);
+                    break;
+                }
+            }
+
+        }
+        if(finished) break;
+//        if(c_time+1<total_time){
+//            cout<<"Seems wrong. "<<c_time<<" "<<total_time<<" s"<<endl; exit(1);
+//        }
+        current_update_index++;
+    }
+
+
+    //cout<<"Avg_response_time " << avg_response_time / count / 1000000 <<endl;
+    return make_pair(count * 1.0 / T, avg_response_time / count);//return throughput (query per second) and average response time (in us)
+}
+
+pair<double,int> Graph::getFastestWorker(vector<double>& workers){
+    pair<double,int> minT;
+    minT.first=workers[0], minT.second=0;
+    for(int i=1;i<workers.size();++i){
+        if(workers[i]<minT.first){
+            minT.first=workers[i]; minT.second=i;
+        }
+    }
+    return minT;
+}
+//update first model, multiple workers
+pair<double, double> Graph::simulator_UpdateFirst(vector<vector<double>> & query_cost, vector<vector<double>> & update_cost, vector<query> &queryList, int T, double period_time, int workerNum){
+    int total_time; // terminal time for each period
+    unsigned long long int count = 0; // the number of queries processed.
+
+    double avg_response_time = 0.0;
+    query* current_query;
+
+    double c_time=0;  // current time for processing queries
+
+//    T = T*microsecs_per_sec; // transform T to microseconds
+    int num_updates = T/period_time;//number of batch updates
+//    cout<<"batch number: "<<num_updates<<endl;
+    int current_update_index=0;
+
+
+    bool finished = false;
+
+    int query_processed_in_one_update_slot = 0;
+
+    double update_time_rest;
+
+    if(workerNum>1){//with multiple workers
+        benchmark::heap<2, int, long long int> pqueue(workerNum);
+        int topID; long long int topValue;
+        vector<double> workers(workerNum,0.0);
+        vector<double> c_times(workerNum,0.0);
+        pair<double, int> minT;
+        while(current_update_index * period_time < T){
+//        cout<<"batch "<<current_update_index<<endl;
+            c_time = period_time * current_update_index;  // + batch_update_costs[current_update_index%batch_update_costs.size()];
+            double durationPoint=c_time;
+            // start from c_time, end at total_time
+            total_time = min((int)period_time * (current_update_index+1), T);
+            query_processed_in_one_update_slot = 0;
+            for(int i=0;i<query_cost.size();++i){
+                update_time_rest = update_cost[i][current_update_index % update_cost.size()];//update time
+//                cout<<"Duration of Q-Stage "<<i<<" : "<<update_time_rest<< " s"<<endl;
+                c_time=durationPoint;
+                for(int wi=0;wi<c_times.size();++wi){
+                    c_times[wi]=c_time;
+                    pqueue.update(wi,c_time*Resolution);
+                }
+                if(update_time_rest==0)
+                    continue;
+
+                durationPoint+=update_time_rest;
+                while(c_time <= durationPoint && !pqueue.empty()) {//if there is remained time for querying
+
+                    pqueue.extract_min(topID, topValue);
+                    c_time=c_times[topID];
+                    if( count < queryList.size()) {
+                        current_query = &queryList[count];
+                    }else {//if all queries are processed
+                        finished = true;
+//                    cout<<"!!! Finished the processing of all queries."<<endl;
+                        break;
+                    }
+
+                    current_query->process_time = query_cost[i][query_processed_in_one_update_slot % query_cost[i].size()];//obtain the true query processing time
+                    if (current_query->init_time> c_times[topID]){
+                        c_times[topID] = current_query->init_time;
+                    }
+
+                    //c_time = max(c_time, current_query->init_time*1000000.0);
+                    if(c_times[topID] + current_query->process_time <= durationPoint) {
+                        count++;
+                        query_processed_in_one_update_slot++;
+                        avg_response_time +=  (c_times[topID] -  current_query->init_time + current_query->process_time);//obtain the query response time
+//                simulated_query_costs.push_back(current_query->process_time);
+                        c_times[topID] += current_query->process_time;
+                        pqueue.update(topID,c_times[topID]*Resolution);
+                    } else {//if the remained time is not enough for query processing
+                        current_query->process_time = current_query->process_time - (durationPoint - c_time);
+                        c_times[topID] += current_query->process_time;
+                        break;
+                    }
+                    if(!pqueue.empty()){
+                        c_time=c_times[pqueue.top_id()];
+                    }else{
+                        break;
+                    }
+
+
+                }
+
+            }
+            if(finished) break;
+//        if(c_time+1<total_time){
+//            cout<<"Seems wrong. "<<c_time<<" "<<total_time<<" s"<<endl; exit(1);
+//        }
+            current_update_index++;
+        }
+    }
+    else{//single worker
+        while(current_update_index * period_time < T){
+//        cout<<"batch "<<current_update_index<<endl;
+            c_time = period_time * current_update_index;  // + batch_update_costs[current_update_index%batch_update_costs.size()];
+            double durationPoint=c_time;
+            // start from c_time, end at total_time
+            total_time = min((int)period_time * (current_update_index+1), T);
+            query_processed_in_one_update_slot = 0;
+            for(int i=0;i<query_cost.size();++i){
+                update_time_rest = update_cost[i][current_update_index % update_cost.size()];//update time
+//                cout<<"Duration of Q-Stage "<<i<<" : "<<update_time_rest<< " s"<<endl;
+                c_time=durationPoint;
+                if(update_time_rest==0)
+                    continue;
+
+                durationPoint+=update_time_rest;
+                while(c_time <= durationPoint) {//if there is remained time for querying
+                    if( count < queryList.size()) {
+                        current_query = &queryList[count];
+                    }else {//if all queries are processed
+                        finished = true;
+//                    cout<<"!!! Finished the processing of all queries."<<endl;
+                        break;
+                    }
+//            cout<<"query "<<count<<": "<<current_query->init_time<<" "<<current_query->process_time<<" ";
+                    current_query->process_time = query_cost[i][query_processed_in_one_update_slot % query_cost[i].size()];//obtain the true query processing time
+//            cout<<current_query->process_time<<endl;
+
+                    if (current_query->init_time> c_time){
+                        c_time = current_query->init_time;
+                    }
+
+                    //c_time = max(c_time, current_query->init_time*1000000.0);
+                    if(c_time + current_query->process_time <= durationPoint) {
+                        count++;
+                        query_processed_in_one_update_slot++;
+                        avg_response_time +=  (c_time -  current_query->init_time + current_query->process_time);//obtain the query response time
+//                simulated_query_costs.push_back(current_query->process_time);
+                        c_time += current_query->process_time;
+                    } else {//if the remained time is not enough for query processing
+                        current_query->process_time = current_query->process_time - (durationPoint - c_time);
+                        break;
+                    }
+                }
+
+            }
+            if(finished) break;
+//        if(c_time+1<total_time){
+//            cout<<"Seems wrong. "<<c_time<<" "<<total_time<<" s"<<endl; exit(1);
+//        }
+            current_update_index++;
+        }
+    }
+
+
+
+
+    //cout<<"Avg_response_time " << avg_response_time / count / 1000000 <<endl;
+    return make_pair(count * 1.0 / T, avg_response_time / count);//return throughput (query per second) and average response time (in us)
+}
+
+// function for simulating the system throughput
+double Graph::ThroughputSimulate(vector<vector<double>> & query_costs, vector<vector<double>>& update_costs, int simulation_time, double threshold_time, double period_time, double queryTime, int workerNum){//period_time is update interval time, simulation_time is the overall time for simulation
+    Timer tt;
+    tt.start();
+    double l = 0, r = 2000000; // be careful of 'r'
+    double throughput = 0.0;
+    int lambda;
+    int gap=1;
+
+    r*=workerNum;
+
+    if(r>workerNum*10/queryTime){
+        r=workerNum*10/queryTime;
+    }
+
+    cout<<"Simulate the throughput of system... r: "<<r<<" ; gap: "<<gap<<" ; worker number: "<< workerNum<<endl;
+    while(l < r){//why use different lambda?
+        lambda = (l+r)/2;
+        if(lambda==0){
+            lambda=1;
+        }
+        auto queryList = generate_queryList(lambda, simulation_time);
+        cout<<"lambda: "<<lambda<<" ; the size of querylist: "<<queryList.size();
+
+//        pair<double,double> result = simulator_UpdateFirst(query_costs, update_costs, queryList, simulation_time, period_time);
+        pair<double,double> result = simulator_UpdateFirst(query_costs, update_costs, queryList, simulation_time, period_time, workerNum);
+
+//        pair<double,double> result = simulator_UpdateFirst(simulated_query_costs, simulated_update_costs, queryList, simulation_time, period_time);
+        if(result.second <= threshold_time){
+            if(throughput < result.first) {
+//                cout<<"here:" << result.first<<endl;
+                throughput=result.first;
+
+                cout<<" ; throughput: "<<result.first<< " ; response query time: "<< result.second*1000 <<" ms";
+            }
+            l = lambda + gap;
+//            l=l*1.1;
+        }else{
+            r = lambda - gap;
+//            r=r/1.1;
+        }
+        cout<<endl;
+    }
+
+    tt.stop();
+    cout<<"Time for throughput simulation: "<<tt.GetRuntime()<<" s"<<endl;
+    return throughput;
+
 }
 
 //function for efficiency test
@@ -2613,7 +3151,7 @@ void Graph::GetBatchThroughput(vector<double> & queryTimes, int intervalT, unsig
 
 }
 
-double Graph::EffiMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType) {
+double Graph::EffiMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType, vector<double> &qTime) {
     algoQuery=queryType;
     Timer tt;
     int ID1, ID2, d1, d2;
@@ -2629,6 +3167,7 @@ double Graph::EffiMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int que
         results[i]=d1;
         tt.stop();
         runT+=tt.GetRuntime();
+        qTime.push_back(tt.GetRuntime());
         if(ifDebug){
             d2= Dijkstra(ID1,ID2,Neighbor);
             if(d1!=d2){
@@ -2642,7 +3181,7 @@ double Graph::EffiMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int que
     return runT/runtimes;
 }
 
-double Graph::EffiPMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType) {
+double Graph::EffiPMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType, vector<double> &qTime) {
     algoQuery=queryType;
     Timer tt;
     int ID1, ID2, d1, d2;
@@ -2658,6 +3197,7 @@ double Graph::EffiPMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int qu
         results[i]=d1;
         tt.stop();
         runT+=tt.GetRuntime();
+        qTime.push_back(tt.GetRuntime());
         if(ifDebug){
             d2= Dijkstra(ID1,ID2,Neighbor);
             if(d1!=d2){
@@ -2670,7 +3210,7 @@ double Graph::EffiPMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int qu
     return runT/runtimes;
 }
 
-double Graph::EffiPostMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType) {
+double Graph::EffiPostMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType, vector<double> &qTime) {
     algoQuery=queryType;
     Timer tt;
     int ID1, ID2, d1, d2;
@@ -2686,6 +3226,7 @@ double Graph::EffiPostMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int
         results[i]=d1;
         tt.stop();
         runT+=tt.GetRuntime();
+        qTime.push_back(tt.GetRuntime());
         if(ifDebug){
             d2= Dijkstra(ID1,ID2,Neighbor);
             if(d1!=d2){
@@ -3051,16 +3592,17 @@ void Graph::PostMHLIndexCompareCH(string filename){
     }
 }
 
-//function of testing the throughput on real-life updates
+//function of testing the throughput on random updates
 void Graph::RandomUpdateThroughputTest(string updateFile, int batchNum, int batchSize, int batchInterval){
     bool ifDebug=false;
-//    ifDebug=true;
+    ifDebug=true;
     int runtimes=10000;
     ifstream IF(updateFile);
     if(!IF){
         cout<<"Cannot open file "<<updateFile<<endl;
         exit(1);
     }
+    cout<<"update file: "<<updateFile<<endl;
     string line;
     vector<string> vs;
     int ID1,ID2,oldW,newW,weight;
@@ -3290,6 +3832,272 @@ void Graph::RandomUpdateThroughputTest(string updateFile, int batchNum, int batc
 //    EffiCheckStages(ODpair,runtimes,batchInterval,throughputNum,stageUpdateT,stageQueryT);
     AverageStagePerformance(batchNum,stageUpdateT,stageQueryT);
     cout<<"\nPartiNum: "<<partiNum<<". Overall throughput: "<<throughputNum<<" ; Average throughput: "<<throughputNum/batchNum<<" ; Average batch update Time: "<<updateTime/batchNum<<" s."<<endl;
+}
+
+//function of testing the throughput on random updates
+void Graph::RandomUpdateThroughputTestQueueModel(int batchNum, int batchSize, int batchInterval, double T_r, int workerNum) {//T_r is in seconds
+    bool ifDebug=false;
+//    ifDebug=true;
+    int runtimes=10000;
+//    runtimes=1000;
+    string updateFile=sourcePath+dataset+".update";
+    ifstream IF(updateFile);
+    if(!IF){
+        cout<<"Cannot open file "<<updateFile<<endl;
+        exit(1);
+    }
+    cout<<"update file: "<<updateFile<<endl;
+    string line;
+    vector<string> vs;
+    int ID1,ID2,oldW,newW,weight;
+    getline(IF,line);
+    vs.clear();
+    boost::split(vs,line,boost::is_any_of(" "));
+    assert(vs.size()==1);
+    int eNum=stoi(vs[0]);
+    if(batchNum*batchSize>eNum){
+        batchNum=eNum/batchSize;
+        cout<<"Actual batch number: "<<batchNum<<endl;
+    }
+    vector<vector<pair<pair<int,int>,int>>> batchUpdates(batchNum);
+    for(int i=0;i<batchNum;++i){
+        for(int j=0;j<batchSize;++j){
+            getline(IF,line);
+            vs.clear();
+            boost::split(vs,line,boost::is_any_of(" "));
+            ID1=stoi(vs[0]), ID2=stoi(vs[1]), weight=stoi(vs[2]);
+            batchUpdates[i].emplace_back(make_pair(ID1,ID2),weight);
+        }
+    }
+    IF.close();
+    cout<<"Update batch number: "<<batchNum<<" ; batch size: "<<batchSize<<" ; Batch interval: "<< batchInterval<<endl;
+
+    string queryF = sourcePath+dataset + ".query";
+    if(samePartiPortion!=-1){
+        queryF=sourcePath + "tmp/"+dataset+".PostMHL_"+to_string(bandWidth)+".sameParti_"+to_string(samePartiPortion)+".query";
+    }
+    ifstream IF2(queryF);
+    if(!IF2){
+        cout<<"Cannot open file "<<queryF<<endl;
+        exit(1);
+    }
+    cout<<"Query file: "<<queryF<<endl;
+    int num;
+    vector<pair<int,int>> ODpair;
+    IF2>>num;
+    for(int k=0;k<num;k++){
+        IF2>>ID1>>ID2;
+        ODpair.emplace_back(ID1, ID2);
+    }
+    IF2.close();
+
+    //index maintenance
+    Timer tt;
+    Timer tRecord;
+    double runT1=0, runT2 = 0;
+    double throughputNum=0;
+    if(algoChoice==5){
+        ProBeginVertexSetParti.assign(partiNum,vector<int>());
+        vertexIDChLParti.assign(partiNum,set<int>());
+        ProBeginVertexSetPartiExtend.assign(partiNum,vector<int>());
+    }
+    double updateTime=0;
+    vector<vector<double>> stageUpdateT(5,vector<double>());//(stage, update time)
+    vector<vector<double>> stageQueryT(5,vector<double>());//(stage, query times)
+    vector<pair<pair<int,int>,pair<int,int>>> wBatchDec;
+    vector<pair<pair<int,int>,pair<int,int>>> wBatchInc;
+    vector<double> aveDuration(5,0.0);
+    EffiStageCheck(ODpair, runtimes, stageQueryT);
+//    EffiStageCheck(ODpair, runtimes, stageQueryT);
+//    EffiStageCheck(ODpair, 100, stageQueryT);
+//    batchNum=2;
+    overlayUpdateT=0;
+    for(int i=0;i<batchNum;++i){
+        stageDurations.clear();
+        stageDurations.assign(5,0);
+        wBatchDec.clear(); wBatchInc.clear();
+        map<pair<int,int>,int> uEdges;
+        for(int j=0;j<batchUpdates[i].size();++j){
+            ID1=batchUpdates[i][j].first.first, ID2=batchUpdates[i][j].first.second, weight=batchUpdates[i][j].second;
+            bool ifFind=false;
+            if(ID1>ID2){
+                int temp=ID1;
+                ID1=ID2, ID2=temp;
+//                cout<<"ID2 is smaller!"<<ID1<<" "<<ID2<<endl;
+            }
+            if(j<batchSize/2){//decrease update
+                for(auto it=Neighbor[ID1].begin();it!=Neighbor[ID1].end();++it){
+                    if(it->first==ID2){
+                        ifFind=true;
+                        oldW=it->second;
+//                        weight=(0.5+0.5*rand()/(RAND_MAX+1.0))*oldW;
+//                        cout<<weight<<endl;
+                        weight=oldW/2;
+                        if(weight>0 && weight<oldW){
+//                        cout<<"Dec "<<ID1<<" "<<ID2<<" "<<oldW<<" "<<weight<<endl;
+                            wBatchDec.emplace_back(make_pair(ID1,ID2), make_pair(oldW,weight));
+                        }
+
+                        break;
+                    }
+                }
+            }
+            else{//increase update
+                for(auto it=Neighbor[ID1].begin();it!=Neighbor[ID1].end();++it){
+                    if(it->first==ID2){
+                        ifFind=true;
+                        oldW=it->second;
+//                        weight=(1+1*rand()/(RAND_MAX+1.0))*oldW;
+                        weight=2*oldW;
+                        if(weight>0 && weight>oldW) {
+//                        cout<<"Inc "<<ID1<<" "<<ID2<<" "<<oldW<<" "<<weight<<endl;
+                            wBatchInc.emplace_back(make_pair(ID1, ID2), make_pair(oldW, weight));
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if(uEdges.find(make_pair(ID1,ID2))==uEdges.end()){//if not found
+                uEdges.insert({make_pair(ID1,ID2),weight});
+            }else{
+                cout<<"Wrong. Find. "<<ID1<<" "<<ID2<<" "<<weight<<" "<<uEdges[make_pair(ID1,ID2)]<<" "<<oldW <<endl;
+                exit(1);
+            }
+
+            if(!ifFind){
+                cout<<"Wrong edge update. "<<ID1<<" "<<ID2<<" "<<endl; exit(1);
+            }
+        }
+        cout<<"Batch "<<i<<" . Decrease update number: "<<wBatchDec.size()<<" ; Increase update number: "<<wBatchInc.size()<<endl;
+
+        int id1=2, id2=3;
+//        cout<<"Before update "<<i<<". "<<id1<<"("<<NodeOrder[id1]<<","<<PartiTags[id1].first<<") "<<id2<<"("<<NodeOrder[id2]<<","<<PartiTags[id2].first<<") "<<QueryPostMHL(id1,id2)<<"("<<Dijkstra(id1,id2,Neighbor)<<")"<<endl;
+//        cout<<"Before update "<<i<<". "<<id1<<"("<<NodeOrder[id1]<<") "<<id2<<"("<<NodeOrder[id2]<<") "<<endl;
+//        for(auto it=Tree[rank[id1]].vert.begin();it!=Tree[rank[id1]].vert.end();++it){
+//            if(it->first==id2){
+//                cout<<"CH index. "<<id1<<" "<<id2<<" "<<it->second.first<<" "<<it->second.second<<endl;
+//                break;
+//            }
+//        }
+
+        //Step 1: Decrease updates
+        tt.start();
+        if(!wBatchDec.empty()){
+            cout<<"Decrease update. "<<wBatchDec.size()<<endl;
+            tRecord.start();
+//                    boost::thread_group thread;
+
+            if(algoChoice==1){
+//                        thread.add_thread(new boost::thread(&Graph::DecBatchThroughputNP, this, boost::ref(wBatch), u, boost::ref(runT1)));
+                DecBatchThroughputNP(wBatchDec, i, runT1);
+            }else if(algoChoice==2){
+//                        thread.add_thread(new boost::thread(&Graph::PMHLBatchUpdateDec, this, boost::ref(wBatch), u, boost::ref(runT1)));
+//                IndexMaintenance(wBatchDec, i, runT1);
+            }
+
+            else if(algoChoice==3){
+//                        thread.add_thread(new boost::thread(&Graph::PMHLBatchUpdateDec, this, boost::ref(wBatch), u, boost::ref(runT1)));
+                PMHLBatchUpdateDec(wBatchDec, i, runT1);
+            }else if(algoChoice==5){
+//                        thread.add_thread(new boost::thread(&Graph::PostMHLBatchUpdateDec, this, boost::ref(wBatch), u, boost::ref(runT1)));
+                PostMHLBatchUpdateDec(wBatchDec, i, runT1);
+            }
+
+//                    thread.add_thread(new boost::thread(&Graph::EffiCheckThroughput, this, boost::ref(ODpair),  boost::ref(tRecord), batchInterval, boost::ref(throughputNum)));
+//                    thread.join_all();
+
+//            if(ifDebug){
+//                CorrectnessCheck(100);
+//            }
+        }
+
+        //Step 2: Increase updates
+        if(!wBatchInc.empty()){
+            cout<<"Increase update. "<<wBatchInc.size()<<endl;
+//            tRecord.start();
+////            boost::thread_group thread;
+            if(algoChoice==1){
+//                        thread.add_thread(new boost::thread(&Graph::IncBatchThroughputNP, this, boost::ref(wBatch), u, boost::ref(runT2)));
+                IncBatchThroughputNP(wBatchInc, i, runT2);
+            }else if(algoChoice==3){
+//                        thread.add_thread(new boost::thread(&Graph::PMHLBatchUpdateInc, this, boost::ref(wBatch), u, boost::ref(runT2)));
+                PMHLBatchUpdateInc(wBatchInc, i, runT2);
+            }else if(algoChoice==5){
+//                        thread.add_thread(new boost::thread(&Graph::PostMHLBatchUpdateInc, this, boost::ref(wBatch), u, boost::ref(runT2)));//increase update is incorrect
+                PostMHLBatchUpdateInc(wBatchInc, i, runT2);
+            }
+
+//            if(i==19){
+//                ofstream OF(sourcePath+dataset+".CH19");
+//                if(!OF.is_open()){
+//                    cout<<"Fail to open file"<<endl; exit(1);
+//                }
+//                OF<<node_num<<" "<<edge_num<<endl;
+//                for(int i=0;i<Neighbor.size();++i){
+//                    for(auto it=Neighbor[i].begin();it!=Neighbor[i].end();++it){
+//                        OF<<i<<" "<<it->first<<" "<<it->second<<endl;
+//                    }
+//                }
+//                OF.close();
+//                PostMHLIndexStoreCH(sourcePath+dataset+".CHIndex19");
+//                cout<<"Write done."<<endl;
+//            }
+
+//                    thread.add_thread(new boost::thread(&Graph::EffiCheckThroughput, this, boost::ref(ODpair),  boost::ref(tRecord), batchInterval, boost::ref(throughputNum)));
+//                    thread.join_all();
+
+//                    cout<<"After update: "<<endl;
+//                    for(int i=0;i<Tree[rank[t]].disPost.size();++i){
+//                        if(Tree[rank[t]].vAncestor[i]==hub){
+//                            cout<<"Cnt: "<<Tree[rank[t]].disPost[i]<<" "<<Tree[rank[t]].cntPost[i]<<endl;
+//                        }
+//                    }
+//                    for(auto it=Tree[rank[t]].vert.begin();it!=Tree[rank[t]].vert.end();++it){
+//                        cout<<"sc: "<<t<<" "<<it->first<<" "<<it->second.first<<"("<<it->second.second<<")"<<endl;
+//                    }
+//                    cout<<"disB: "<<s<<" "<<bv<<" "<<Tree[rank[s]].disInf[BoundVertexMap[3][bv]]<<endl;
+
+
+        }
+
+        tt.stop();
+        updateTime+=tt.GetRuntime();
+        cout<<"Batch "<<i<<" . Update time: "<<tt.GetRuntime()<<" s."<<endl;
+
+        if(ifDebug){
+            CorrectnessCheck(100);
+        }
+
+        for(int i=0;i<stageDurations.size()-1;++i){
+            cout<<"Duration of U-Stage "<<i+2<<" : "<<stageDurations[i]<<" s"<<endl;
+            aveDuration[i]+=stageDurations[i];
+        }
+
+
+//        EffiCheckStages(ODpair,runtimes,batchInterval,throughputNum,stageUpdateT,stageQueryT);
+        vector<double> duration = StageDurationCompute(batchInterval);
+        for(int j=0;j<duration.size();++j){
+            stageUpdateT[j].push_back(duration[j]);
+        }
+
+    }
+//    for(int i=0;i<stageDurations.size();++i){
+//        stageDurations[i]/=batchNum;
+//    }
+//    EffiCheckStages(ODpair,runtimes,batchInterval,throughputNum,stageUpdateT,stageQueryT);
+//    AverageStagePerformance(batchNum,stageUpdateT,stageQueryT);
+    cout<<"*************\nAverage batch update Time: "<<updateTime/batchNum<<" s."<<endl;
+    for(int i=0;i<aveDuration.size()-1;++i){
+        cout<<"Average update time of U-Stage "<<i+2<<" : "<<aveDuration[i]/batchNum<<" s ; query time: "<<get_mean(stageQueryT[i])*1000<<" ms"<<endl;
+    }
+
+
+    pair<double,double> resultE = ThroughputEstimate(stageQueryT, stageUpdateT, T_r, batchInterval);
+    cout<<"Estimated throughput: "<<resultE.first<<" ; fastest available query time: "<<resultE.second*1000<<" ms"<<endl;
+    throughputNum = ThroughputSimulate(stageQueryT,stageUpdateT,batchInterval*batchNum,T_r,batchInterval,resultE.second,workerNum);
+
+    cout<<"\nPartiNum: "<<partiNum<<". Throughput: "<<throughputNum<<" ; Average batch update Time: "<<updateTime/batchNum<<" s."<<endl;
 }
 
 //function of testing the throughput of path-finding system, batchInterval is the time interval between two adjacent update batch (in seconds)
@@ -3575,16 +4383,40 @@ void Graph::PMHLBatchUpdateDec(vector<pair<pair<int, int>, pair<int, int>>> &wBa
     vector<vector<pair<pair<int,int>,int>>> updatedSCs;
     updatedSCs.assign(partiNum,vector<pair<pair<int,int>,int>>());
     if(!partiBatch.empty()){
-        if(partiBatch.size()>threadnum){
-            cout<<"partiBatch is larger than thread number! "<<partiBatch.size()<<" "<<threadnum<< endl;
+        if(threadnum==1){
+            for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                int pid=it->first;
+                DecreasePartiBatchUpdateCheckCH(pid, it->second, overlayBatch, false, updatedSCs[pid]);//old
+            }
         }
-//        cout<<"Update Partition number: "<<partiBatch.size()<<endl;
-        boost::thread_group thread;
-        for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
-            int pid=it->first;
-            thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchUpdateCheckCH, this, pid, boost::ref(it->second), boost::ref(overlayBatch), false, boost::ref(updatedSCs[pid]) ));
+        else{
+            if(partiBatch.size()>threadnum){
+                cout<<"partiBatch is larger than thread number! "<<partiBatch.size()<<" "<<threadnum<< endl;
+                vector<vector<int>> processID;
+                processID.assign(threadnum, vector<int>());
+                vector<int> vertices;
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+                    vertices.emplace_back(pid);
+                }
+                ThreadDistribute(vertices, processID);
+                boost::thread_group thread;
+                for(auto j=0;j<processID.size();++j){
+                    thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchUpdateCheckCHV, this, processID[j], boost::ref(partiBatch), boost::ref(overlayBatch), false, boost::ref(updatedSCs) ));
+                }
+                thread.join_all();
+            }else{
+                boost::thread_group thread;
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+                    thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchUpdateCheckCH, this, pid, boost::ref(it->second), boost::ref(overlayBatch), false, boost::ref(updatedSCs[pid]) ));//old
+//            thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchUpdateCheckCH, this, pid, boost::ref(it->second), boost::ref(overlayBatch), true, boost::ref(updatedSCs[pid]) ));
+                }
+                thread.join_all();
+            }
+
         }
-        thread.join_all();
+
     }
     map<pair<int,int>,pair<int,int>> updateSCTrue;
     int updateSCSize=0;
@@ -3630,39 +4462,82 @@ void Graph::PMHLBatchUpdateDec(vector<pair<pair<int, int>, pair<int, int>>> &wBa
     tt2.start();
 //    cout<<"algoQuery: PCH-No"<<endl;
 
-    boost::thread_group thread;
-    thread.add_thread(new boost::thread(&Graph::DecreaseOverlayBatchLabel, this, boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(ProBeginVertexSetOverlay), boost::ref(vertexIDChLOverlay) ));
-//    DecreaseOverlayBatchLabel(Tree,rank,heightMax,ProBeginVertexSetOverlay,vertexIDChLOverlay);//vector<Node> &Tree, vector<int> &rank, int heightMax, vector<int> &ProBeginVertexSet, set<int> &vertexIDChL
-
-    if(!partiBatch.empty()){
+    if(threadnum==1){
+        DecreaseOverlayBatchLabel(Tree,rank,heightMax,ProBeginVertexSetOverlay,vertexIDChLOverlay);//vector<Node> &Tree, vector<int> &rank, int heightMax, vector<int> &ProBeginVertexSet, set<int> &vertexIDChL
+        if(!partiBatch.empty()){
 //        if(partiBatch.size()>threadnum){
 //            cout<<"partiBatch is larger than thread number! "<<partiBatch.size()<<" "<<threadnum<< endl;
 //        }
 //        cout<<"Update Partition number: "<<partiBatch.size()<<endl;
-//        boost::thread_group thread;
-        for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
-            int pid=it->first;
-            thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchLabel, this, boost::ref(Trees[pid]), boost::ref(ranks[pid]), heightMaxs[pid], boost::ref(ProBeginVertexSetParti[pid]), boost::ref(vertexIDChLParti[pid]) ));
+            for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                int pid=it->first;
+//            cout<<"partition "<<pid<<" "<<heightMaxs[pid]<< endl;
+                DecreasePartiBatchLabel(Trees[pid],ranks[pid], heightMaxs[pid], ProBeginVertexSetParti[pid], vertexIDChLParti[pid]);
+            }
         }
-//        thread.join_all();
+
+    }else{
+
+        if(partiBatch.size()+1>threadnum){
+            boost::thread_group thread;
+            thread.add_thread(new boost::thread(&Graph::DecreaseOverlayBatchLabel, this, boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(ProBeginVertexSetOverlay), boost::ref(vertexIDChLOverlay) ));
+
+            vector<vector<int>> processID;
+            processID.assign(threadnum-1, vector<int>());
+            vector<int> vertices;
+            for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                int pid=it->first;
+                vertices.emplace_back(pid);
+            }
+            ThreadDistribute(vertices, processID);
+
+            for(auto j=0;j<processID.size();++j){
+                thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchLabelV, this, processID[j], boost::ref(Trees), boost::ref(ranks), boost::ref(heightMaxs), boost::ref(ProBeginVertexSetParti), boost::ref(vertexIDChLParti) ));
+            }
+            thread.join_all();
+
+        }else{
+            boost::thread_group thread;
+            thread.add_thread(new boost::thread(&Graph::DecreaseOverlayBatchLabel, this, boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(ProBeginVertexSetOverlay), boost::ref(vertexIDChLOverlay) ));
+
+            if(!partiBatch.empty()){
+//        cout<<"Update Partition number: "<<partiBatch.size()<<endl;
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+//            cout<<"partition "<<pid<<" "<<heightMaxs[pid]<< endl;
+                    thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchLabel, this, boost::ref(Trees[pid]), boost::ref(ranks[pid]), heightMaxs[pid], boost::ref(ProBeginVertexSetParti[pid]), boost::ref(vertexIDChLParti[pid]) ));
+                }
+            }
+            thread.join_all();
+        }
+
     }
 
-    thread.join_all();
 
     algoQuery=PH2H_No;
     tt2.stop();
     stageDurations[PCH_No]+=tt2.GetRuntime();
     // repair the partition index
     if(algoUpdate>=PH2H_Post){
+//        cout<<"repair post-boundary index"<<endl;
         tt2.start();
-        Repair_PartiIndex(true, false, partiBatch);//post
+        if(threadnum==1){
+            Repair_PartiIndex(false, false, partiBatch);//post
+        }else{
+            Repair_PartiIndex(true, false, partiBatch);//post
+        }
         algoQuery=PH2H_Post;
         tt2.stop();
         stageDurations[PH2H_No]+=tt2.GetRuntime();
         if(algoUpdate==PH2H_Cross){
             tt2.start();
 //            RefreshExtensionLabels(partiBatch);//extend
-            RefreshExtensionLabelsNoAllPair(partiBatch);//extend
+            if(threadnum==1){
+                RefreshExtensionLabelsNoAllPair(partiBatch, false);//extend
+            }else{
+                RefreshExtensionLabelsNoAllPair(partiBatch,true);//extend
+            }
+
             algoQuery=PH2H_Cross;
             tt2.stop();
             stageDurations[PH2H_Post]+=tt2.GetRuntime();
@@ -3782,7 +4657,7 @@ void Graph::PMHLBatchUpdateDecOpt(vector<pair<pair<int, int>, pair<int, int>>> &
         algoQuery=PH2H_Post;
         if(algoUpdate==PH2H_Cross){
 //            RefreshExtensionLabels(partiBatch);//extend
-            RefreshExtensionLabelsNoAllPair(partiBatch);//extend
+            RefreshExtensionLabelsNoAllPair(partiBatch,true);//extend
             algoQuery=PH2H_Cross;
         }
     }
@@ -3902,63 +4777,78 @@ void Graph::PostMHLBatchUpdateDec(vector<pair<pair<int, int>, pair<int, int>>> &
     stageDurations[Dijk]+=tt2.GetRuntime();
 //    cout<<"algoQuery: PCH-No"<<endl;
 
-    //unparalleled version
-//    if(algoUpdate>=PH2H_Post){
-//        double tOverlay=0,tPost=0,tCross=0;
-//        tt2.start();
-//        // Step 2: Update overlay index
-//        DecreaseOverlayBatchLabelPostMHL(Tree,rank,heightMax,ProBeginVertexSetOverlay,vertexIDChLOverlay);//top-down update for overlay
-//        tt2.stop();
-//        tOverlay=tt2.GetRuntime();
-//        cout<<"Overlay index update: "<<tOverlay<<endl;
-//        tt2.start();
-//        // Step 3: Update partition index
-//        Repair_PartiIndexPostMHLPost(true, false, partiBatch, tPost);//post
-////        Repair_PartiIndexPostMHLPost(false, false, partiBatch);//post
-//        tt2.stop();
-//        stageDurations[PCH_No]=tt2.GetRuntime();
-//        if(algoUpdate==PH2H_Cross){
-//            tt2.start();
-//            RefreshExtensionLabelsPostMHL(true, false, tCross);//extend, single-thread
-////            RefreshExtensionLabelsPostMHL(false, false);//extend, single-thread
-//            tt2.stop();
-//            stageDurations[PH2H_Post]=tt2.GetRuntime();
-//        }
-//    }
-    //parallel version
-    double tOverlay=0,tPost=0,tCross=0;
-    if(algoUpdate==PH2H_Post) {
-        tt2.start();
-        DecreaseOverlayBatchLabelPostMHL(Tree,rank,heightMax,ProBeginVertexSetOverlay,vertexIDChLOverlay);//top-down update for overlay
-        tt2.stop();
-        tOverlay = tt2.GetRuntime();
-        overlayUpdateT+=tOverlay;
-        cout << "Overlay label update time: " << tOverlay << " s." << endl;
-        tt2.start();
-        Repair_PartiIndexPostMHLPost(true, false, partiBatch, tPost);//post
-//        Repair_PartiIndexPostMHLPost(false, false, partiBatch);//post
-        tt2.stop();
-        stageDurations[PCH_No] = stageDurations[PCH_No]+ tt2.GetRuntime() + tOverlay;
-    }else if(algoUpdate==PH2H_Cross){
-        tt2.start();
-        DecreaseOverlayBatchLabelPostMHL(Tree,rank,heightMax,ProBeginVertexSetOverlay,vertexIDChLOverlay);//top-down update for overlay
-        tt2.stop();
-        tOverlay = tt2.GetRuntime();
-        cout << "Overlay label update time: " << tOverlay << " s." << endl;
-        overlayUpdateT+=tOverlay;
-        boost::thread_group thread;
-        thread.add_thread(new boost::thread(&Graph::Repair_PartiIndexPostMHLPost, this, true, false, boost::ref(partiBatch), boost::ref(tPost) ));
-        thread.add_thread(new boost::thread(&Graph::RefreshExtensionLabelsPostMHL, this, true, false, boost::ref(tCross)));
-        thread.join_all();
-        if(tPost<tCross){
-            stageDurations[PCH_No] = stageDurations[PCH_No]+tOverlay+tPost;
-            stageDurations[PH2H_Post]=stageDurations[PH2H_Post]+tCross-tPost;
-        }else{
-            cout<<"!!! Cross-boundary update is faster than post-boundary update! "<<tPost<<" "<<tCross<<endl;
-            stageDurations[PCH_No] = stageDurations[PCH_No]+tOverlay+tCross;
-//            stageDurations[PH2H_Post]=0;
+    vector<int> vParti;
+    for(int pid=0;pid<partiNum;++pid){
+        if(!ProBeginVertexSetPartiExtend[pid].empty()){
+            vParti.push_back(pid);
         }
     }
+
+
+    if(threadnum<=affectedParti.size()){
+        cout<<"No enough thread for parallelization between post-boundary and cross-boundary."<<endl;
+        //unparalleled version
+        if(algoUpdate>=PH2H_Post){
+            double tOverlay=0,tPost=0,tCross=0;
+            tt2.start();
+            // Step 2: Update overlay index
+            DecreaseOverlayBatchLabelPostMHL(Tree,rank,heightMax,ProBeginVertexSetOverlay,vertexIDChLOverlay);//top-down update for overlay
+            tt2.stop();
+            tOverlay=tt2.GetRuntime();
+            cout<<"Overlay index update: "<<tOverlay<<endl;
+            tt2.start();
+            // Step 3: Update partition index
+            Repair_PartiIndexPostMHLPost(true, false, partiBatch, tPost);//post
+//        Repair_PartiIndexPostMHLPost(false, false, partiBatch);//post
+            tt2.stop();
+            stageDurations[PCH_No]=tt2.GetRuntime();
+            if(algoUpdate==PH2H_Cross){
+                tt2.start();
+                RefreshExtensionLabelsPostMHL(true, false, tCross, threadnum);//extend, single-thread
+//            RefreshExtensionLabelsPostMHL(false, false);//extend, single-thread
+                tt2.stop();
+                stageDurations[PH2H_Post]=tt2.GetRuntime();
+            }
+        }
+    }else{//if thread number is sufficient
+        cout<<"Post-boundary and cross-boundary could be parallelized!!!"<<endl;
+        //parallel version
+        double tOverlay=0,tPost=0,tCross=0;
+        if(algoUpdate==PH2H_Post) {
+            tt2.start();
+            DecreaseOverlayBatchLabelPostMHL(Tree,rank,heightMax,ProBeginVertexSetOverlay,vertexIDChLOverlay);//top-down update for overlay
+            tt2.stop();
+            tOverlay = tt2.GetRuntime();
+            overlayUpdateT+=tOverlay;
+            cout << "Overlay label update time: " << tOverlay << " s." << endl;
+            tt2.start();
+            Repair_PartiIndexPostMHLPost(true, false, partiBatch, tPost);//post
+//        Repair_PartiIndexPostMHLPost(false, false, partiBatch);//post
+            tt2.stop();
+            stageDurations[PCH_No] = stageDurations[PCH_No]+ tt2.GetRuntime() + tOverlay;
+        }else if(algoUpdate==PH2H_Cross){
+            tt2.start();
+            DecreaseOverlayBatchLabelPostMHL(Tree,rank,heightMax,ProBeginVertexSetOverlay,vertexIDChLOverlay);//top-down update for overlay
+            tt2.stop();
+            tOverlay = tt2.GetRuntime();
+            cout << "Overlay label update time: " << tOverlay << " s." << endl;
+            overlayUpdateT+=tOverlay;
+            boost::thread_group thread;
+            thread.add_thread(new boost::thread(&Graph::Repair_PartiIndexPostMHLPost, this, true, false, boost::ref(partiBatch), boost::ref(tPost) ));
+            thread.add_thread(new boost::thread(&Graph::RefreshExtensionLabelsPostMHL, this, true, false, boost::ref(tCross), threadnum-affectedParti.size()));
+            thread.join_all();
+            if(tPost<tCross){
+                stageDurations[PCH_No] = stageDurations[PCH_No]+tOverlay+tPost;
+                stageDurations[PH2H_Post]=stageDurations[PH2H_Post]+tCross-tPost;
+            }else{
+                cout<<"!!! Cross-boundary update is faster than post-boundary update! "<<tPost<<" "<<tCross<<endl;
+                stageDurations[PCH_No] = stageDurations[PCH_No]+tOverlay+tCross;
+//            stageDurations[PH2H_Post]=0;
+            }
+        }
+    }
+
+
 
 
     tt.stop();
@@ -4054,68 +4944,72 @@ void Graph::PostMHLBatchUpdateInc(vector<pair<pair<int, int>, pair<int, int>>> &
     stageDurations[Dijk]+=tt2.GetRuntime();
 //    cout<<"algoQuery: PCH-No"<<endl;
 
-
-    // repair the partition index, unparalleled version
-//    if(algoUpdate>=PH2H_Post){
-//        tt2.start();
-//        IncreaseOverlayBatchLabelPostMHL(Tree, rank, heightMax, ProBeginVertexSetOverlay, VidtoTNid);
-//        tt2.stop();
-//        double toverlay=tt2.GetRuntime();
-//        cout<<"Overlay label update time: "<<toverlay<<" s."<<endl;
-////        for(int i=0;i<Tree[rank[67975]].disPost.size();++i){
-////            if(Tree[rank[67975]].vAncestor[i]==67432){
-////                cout<<"B Cnt: "<<Tree[rank[67975]].disPost[i]<<" "<<Tree[rank[67975]].cntPost[i]<<endl;
-////            }
-////        }
-//        double tPost=0,tCross=0;
-//        tt2.start();
-//        Repair_PartiIndexPostMHLPost(true, true, partiBatch, tPost);//post
-////        Repair_PartiIndexPostMHLPost(false, true, partiBatch);//post
-//        tt2.stop();
-//        cout<<"Post-boundary index update time: "<<tt2.GetRuntime()<<" s; Boundary array update: "<<tBoundary<<" s; Ancestor array update: "<<tAncestor<<" s."<<endl;
-//        stageDurations[PCH_No]=tt2.GetRuntime()+toverlay;
-//        if(algoUpdate==PH2H_Cross){
-//            tt2.start();
-//            RefreshExtensionLabelsPostMHL(true, true, tCross);//extend, single-thread
-////            RefreshExtensionLabelsPostMHL(false, true);//extend, single-thread
-//            algoQuery=PH2H_Cross;
-//            tt2.stop();
-//            stageDurations[PH2H_Post]=tt2.GetRuntime();
+    if(threadnum<=affectedParti.size()){
+        // repair the partition index, unparalleled version
+        if(algoUpdate>=PH2H_Post){
+            tt2.start();
+            IncreaseOverlayBatchLabelPostMHL(Tree, rank, heightMax, ProBeginVertexSetOverlay, VidtoTNid);
+            tt2.stop();
+            double toverlay=tt2.GetRuntime();
+            cout<<"Overlay label update time: "<<toverlay<<" s."<<endl;
+//        for(int i=0;i<Tree[rank[67975]].disPost.size();++i){
+//            if(Tree[rank[67975]].vAncestor[i]==67432){
+//                cout<<"B Cnt: "<<Tree[rank[67975]].disPost[i]<<" "<<Tree[rank[67975]].cntPost[i]<<endl;
+//            }
 //        }
-//    }
-    double tOverlay=0,tPost=0,tCross=0;
-    if(algoUpdate==PH2H_Post) {
-        tt2.start();
-        IncreaseOverlayBatchLabelPostMHL(Tree, rank, heightMax, ProBeginVertexSetOverlay, VidtoTNid);
-        tt2.stop();
-        tOverlay = tt2.GetRuntime();
-        overlayUpdateT+=tOverlay;
-        cout << "Overlay label update time: " << tOverlay << " s." << endl;
-        tt2.start();
-        Repair_PartiIndexPostMHLPost(true, true, partiBatch, tPost);//post
+            double tPost=0,tCross=0;
+            tt2.start();
+            Repair_PartiIndexPostMHLPost(true, true, partiBatch, tPost);//post
 //        Repair_PartiIndexPostMHLPost(false, true, partiBatch);//post
-        tt2.stop();
-        stageDurations[PCH_No] = stageDurations[PCH_No]+tt2.GetRuntime() + tOverlay;
-    }else if(algoUpdate==PH2H_Cross){
-        tt2.start();
-        IncreaseOverlayBatchLabelPostMHL(Tree, rank, heightMax, ProBeginVertexSetOverlay, VidtoTNid);
-        tt2.stop();
-        tOverlay = tt2.GetRuntime();
-        cout << "Overlay label update time: " << tOverlay << " s." << endl;
-        overlayUpdateT+=tOverlay;
-        boost::thread_group thread;
-        thread.add_thread(new boost::thread(&Graph::Repair_PartiIndexPostMHLPost, this, true, true, boost::ref(partiBatch), boost::ref(tPost) ));
-        thread.add_thread(new boost::thread(&Graph::RefreshExtensionLabelsPostMHL, this, true, true, boost::ref(tCross)));
-        thread.join_all();
-        if(tPost<tCross){
-            stageDurations[PCH_No] = stageDurations[PCH_No]+tOverlay+tPost;
-            stageDurations[PH2H_Post]=stageDurations[PH2H_Post]+tCross-tPost;
-        }else{
-            cout<<"!!! Cross-boundary update is faster than post-boundary update! "<<tPost<<" "<<tCross<<endl;
-            stageDurations[PCH_No] = stageDurations[PCH_No]+tOverlay+tCross;
+            tt2.stop();
+            cout<<"Post-boundary index update time: "<<tt2.GetRuntime()<<" s; Boundary array update: "<<tBoundary<<" s; Ancestor array update: "<<tAncestor<<" s."<<endl;
+            stageDurations[PCH_No]=tt2.GetRuntime()+toverlay;
+            if(algoUpdate==PH2H_Cross){
+                tt2.start();
+                RefreshExtensionLabelsPostMHL(true, true, tCross, threadnum);//extend, single-thread
+//            RefreshExtensionLabelsPostMHL(false, true);//extend, single-thread
+                algoQuery=PH2H_Cross;
+                tt2.stop();
+                stageDurations[PH2H_Post]=tt2.GetRuntime();
+            }
+        }
+    }else{
+        double tOverlay=0,tPost=0,tCross=0;
+        if(algoUpdate==PH2H_Post) {
+            tt2.start();
+            IncreaseOverlayBatchLabelPostMHL(Tree, rank, heightMax, ProBeginVertexSetOverlay, VidtoTNid);
+            tt2.stop();
+            tOverlay = tt2.GetRuntime();
+            overlayUpdateT+=tOverlay;
+            cout << "Overlay label update time: " << tOverlay << " s." << endl;
+            tt2.start();
+            Repair_PartiIndexPostMHLPost(true, true, partiBatch, tPost);//post
+//        Repair_PartiIndexPostMHLPost(false, true, partiBatch);//post
+            tt2.stop();
+            stageDurations[PCH_No] = stageDurations[PCH_No]+tt2.GetRuntime() + tOverlay;
+        }else if(algoUpdate==PH2H_Cross){
+            tt2.start();
+            IncreaseOverlayBatchLabelPostMHL(Tree, rank, heightMax, ProBeginVertexSetOverlay, VidtoTNid);
+            tt2.stop();
+            tOverlay = tt2.GetRuntime();
+            cout << "Overlay label update time: " << tOverlay << " s." << endl;
+            overlayUpdateT+=tOverlay;
+            boost::thread_group thread;
+            thread.add_thread(new boost::thread(&Graph::Repair_PartiIndexPostMHLPost, this, true, true, boost::ref(partiBatch), boost::ref(tPost) ));
+            thread.add_thread(new boost::thread(&Graph::RefreshExtensionLabelsPostMHL, this, true, true, boost::ref(tCross), threadnum-affectedParti.size()));
+            thread.join_all();
+            if(tPost<tCross){
+                stageDurations[PCH_No] = stageDurations[PCH_No]+tOverlay+tPost;
+                stageDurations[PH2H_Post]=stageDurations[PH2H_Post]+tCross-tPost;
+            }else{
+                cout<<"!!! Cross-boundary update is faster than post-boundary update! "<<tPost<<" "<<tCross<<endl;
+                stageDurations[PCH_No] = stageDurations[PCH_No]+tOverlay+tCross;
 //            stageDurations[PH2H_Post]=0;
+            }
         }
     }
+
+
 
     tt.stop();
 //    runT1+=tt.GetRuntime();
@@ -4168,17 +5062,36 @@ void Graph::PMHLBatchUpdateInc(vector<pair<pair<int, int>, pair<int, int>>> &wBa
     updatedSCs.assign(partiNum,vector<pair<pair<int,int>,int>>());
 
     if(!partiBatch.empty()){
-//        if(partiBatch.size()>threadnum){
-//            cout<<"partiBatch is larger than thread number! "<<partiBatch.size()<<" "<<threadnum<< endl;
-//        }
-//        cout<<"Update Partition number: "<<partiBatch.size()<<endl;
-
-        boost::thread_group thread;
-        for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
-            int pid=it->first;
-            thread.add_thread(new boost::thread(&Graph::IncreasePartiBatchUpdateCheckCH, this, pid, boost::ref(it->second), boost::ref(overlayBatch), false, boost::ref(updatedSCs[pid]) ));
+        if(threadnum==1){
+            for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                int pid=it->first;
+                IncreasePartiBatchUpdateCheckCH(pid, it->second, overlayBatch, false, updatedSCs[pid]);
+            }
+        }else{
+            if(partiBatch.size()>threadnum){
+                cout<<"partiBatch is larger than thread number! "<<partiBatch.size()<<" "<<threadnum<< endl;
+                vector<vector<int>> processID;
+                processID.assign(threadnum, vector<int>());
+                vector<int> vertices;
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+                    vertices.emplace_back(pid);
+                }
+                ThreadDistribute(vertices, processID);
+                boost::thread_group thread;
+                for(auto j=0;j<processID.size();++j){
+                    thread.add_thread(new boost::thread(&Graph::IncreasePartiBatchUpdateCheckCHV, this, processID[j], boost::ref(partiBatch), boost::ref(overlayBatch), false, boost::ref(updatedSCs) ));
+                }
+                thread.join_all();
+            }else{
+                boost::thread_group thread;
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+                    thread.add_thread(new boost::thread(&Graph::IncreasePartiBatchUpdateCheckCH, this, pid, boost::ref(it->second), boost::ref(overlayBatch), false, boost::ref(updatedSCs[pid]) ));
+                }
+                thread.join_all();
+            }
         }
-        thread.join_all();
 
     }
     map<pair<int,int>,pair<int,int>> updateSCTrue;
@@ -4227,24 +5140,44 @@ void Graph::PMHLBatchUpdateInc(vector<pair<pair<int, int>, pair<int, int>>> &wBa
     stageDurations[Dijk]+=tt2.GetRuntime();
     tt2.start();
 
-    boost::thread_group thread;
-    thread.add_thread(new boost::thread(&Graph::IncreaseOverlayBatchLabel, this, boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(ProBeginVertexSetOverlay), boost::ref(VidtoTNid) ));
-//    IncreaseOverlayBatchLabel(Tree, rank, heightMax, ProBeginVertexSetOverlay, VidtoTNid);
 
-    if(!partiBatch.empty()){
-//        if(partiBatch.size()>threadnum){
-//            cout<<"partiBatch is larger than thread number! "<<partiBatch.size()<<" "<<threadnum<< endl;
-//        }
-//        cout<<"Update Partition number: "<<partiBatch.size()<<endl;
-//        boost::thread_group thread;
-        for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
-            int pid=it->first;
-            thread.add_thread(new boost::thread(&Graph::IncreasePartiBatchLabel, this, boost::ref(Trees[pid]), boost::ref(ranks[pid]), heightMaxs[pid], boost::ref(ProBeginVertexSetParti[pid]), boost::ref(VidtoTNidP) ));//vector<Node> &Tree, vector<int> &rank, int heightMax, int& checknum, vector<int>& ProBeginVertexSet, vector<vector<int>> &VidtoTNid
+    if(threadnum==1){
+        IncreaseOverlayBatchLabel(Tree, rank, heightMax, ProBeginVertexSetOverlay, VidtoTNid);
+        if(!partiBatch.empty()){
+            for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                int pid=it->first;
+                IncreasePartiBatchLabel(Trees[pid], ranks[pid], heightMaxs[pid], ProBeginVertexSetParti[pid], VidtoTNidP);//vector<Node> &Tree, vector<int> &rank, int heightMax, int& checknum, vector<int>& ProBeginVertexSet, vector<vector<int>> &VidtoTNid
+            }
         }
-//        thread.join_all();
+    }else{
+        if(partiBatch.size()+1>threadnum){
+            boost::thread_group thread;
+            thread.add_thread(new boost::thread(&Graph::IncreaseOverlayBatchLabel, this, boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(ProBeginVertexSetOverlay), boost::ref(VidtoTNid) ));
+            vector<vector<int>> processID;
+            processID.assign(threadnum-1, vector<int>());
+            vector<int> vertices;
+            for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                int pid=it->first;
+                vertices.emplace_back(pid);
+            }
+            ThreadDistribute(vertices, processID);
+            for(auto j=0;j<processID.size();++j){
+                thread.add_thread(new boost::thread(&Graph::IncreasePartiBatchLabelV, this,  processID[j], boost::ref(Trees), boost::ref(ranks), boost::ref(heightMaxs), boost::ref(ProBeginVertexSetParti), boost::ref(VidtoTNidP) ));
+            }
+            thread.join_all();
+        }else{
+            boost::thread_group thread;
+            thread.add_thread(new boost::thread(&Graph::IncreaseOverlayBatchLabel, this, boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(ProBeginVertexSetOverlay), boost::ref(VidtoTNid) ));
+            if(!partiBatch.empty()){
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+                    thread.add_thread(new boost::thread(&Graph::IncreasePartiBatchLabel, this, boost::ref(Trees[pid]), boost::ref(ranks[pid]), heightMaxs[pid], boost::ref(ProBeginVertexSetParti[pid]), boost::ref(VidtoTNidP) ));//vector<Node> &Tree, vector<int> &rank, int heightMax, int& checknum, vector<int>& ProBeginVertexSet, vector<vector<int>> &VidtoTNid
+                }
+            }
+            thread.join_all();
+        }
     }
 
-    thread.join_all();
 
     algoQuery=PH2H_No;
     tt2.stop();
@@ -4261,7 +5194,12 @@ void Graph::PMHLBatchUpdateInc(vector<pair<pair<int, int>, pair<int, int>>> &wBa
         if(algoUpdate==PH2H_Cross){
             tt2.start();
 //            RefreshExtensionLabels(partiBatch);
-            RefreshExtensionLabelsNoAllPair(partiBatch);
+            if(threadnum==1){
+                RefreshExtensionLabelsNoAllPair(partiBatch, false);
+            }else{
+                RefreshExtensionLabelsNoAllPair(partiBatch, true);
+            }
+
             algoQuery=PH2H_Cross;
             tt2.stop();
             stageDurations[PH2H_Post]+=tt2.GetRuntime();
@@ -4389,7 +5327,7 @@ void Graph::PMHLBatchUpdateIncOpt(vector<pair<pair<int, int>, pair<int, int>>> &
         algoQuery=PH2H_Post;
         if(algoUpdate==PH2H_Cross){
 //            RefreshExtensionLabels(partiBatch);
-            RefreshExtensionLabelsNoAllPair(partiBatch);
+            RefreshExtensionLabelsNoAllPair(partiBatch,true);
             algoQuery=PH2H_Cross;
         }
     }
@@ -6235,6 +7173,22 @@ void Graph::DecreasePartiBatchUpdateCheckCH(int pid, vector<pair<pair<int,int>,p
 //    }
 
 }
+
+//partition update PCH
+void Graph::DecreasePartiBatchUpdateCheckCHV(vector<int> p, map<int,vector<pair<pair<int,int>,pair<int,int>>>>& wBatch, vector<pair<pair<int,int>,pair<int,int>>>& weightOverlay, bool ifOpt, vector<vector<pair<pair<int,int>,int>>>& updatedSC){
+    //partition batch decrease update
+//    vector<pair<pair<int,int>,int>> updatedSC;
+
+    for(int i=0;i<p.size();++i){
+        int pid=p[i];
+        if(ifOpt){
+            DecreasePartiBatchForOpt(pid, wBatch[pid], NeighborsParti, Trees[pid], ranks[pid], heightMaxs[pid], updatedSC[pid], false, false);
+        }else{
+            DecreasePartiBatch(pid, wBatch[pid], NeighborsParti, Trees[pid], ranks[pid], heightMaxs[pid], updatedSC[pid], false);
+        }
+    }
+}
+
 //shortcut update for PostMHL
 
 void Graph::DecreasePartiBatchUpdateCheckPostMHL(map<int, vector<pair<pair<int, int>, pair<int, int>>>>& partiBatch, vector<pair<pair<int,int>,pair<int,int>>>& overlayBatch, bool ifParallel){
@@ -6246,14 +7200,31 @@ void Graph::DecreasePartiBatchUpdateCheckPostMHL(map<int, vector<pair<pair<int, 
         if(!partiBatch.empty()){
             if(partiBatch.size()>threadnum){
                 cout<<"partiBatch is larger than thread number! "<<partiBatch.size()<<" "<<threadnum<< endl;
+                vector<vector<int>> processID;
+                processID.assign(threadnum, vector<int>());
+                vector<int> vertices;
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+                    vertices.emplace_back(pid);
+                }
+                ThreadDistribute(vertices, processID);
+                boost::thread_group thread;
+                for(auto j=0;j<processID.size();++j){
+                    thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchPostMHLShortcutV, this, processID[j], boost::ref(partiBatch), boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(updatedSCs) ));
+                }
+                thread.join_all();
+
             }
+            else{
 //            cout<<"Update Partition number: "<<partiBatch.size()<<endl;
-            boost::thread_group thread;
-            for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
-                int pid=it->first;
-                thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchPostMHLShortcut, this, pid, boost::ref(it->second), boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(updatedSCs[pid]) ));
+                boost::thread_group thread;
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+                    thread.add_thread(new boost::thread(&Graph::DecreasePartiBatchPostMHLShortcut, this, pid, boost::ref(it->second), boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(updatedSCs[pid]) ));
+                }
+                thread.join_all();
             }
-            thread.join_all();
+
         }
     }else{
         cout<<"Single thread computation."<<endl;
@@ -6457,6 +7428,13 @@ void Graph::IncreasePartiBatchUpdateCheckCH(int pid, vector<pair<pair<int,int>,p
 
 }
 
+void Graph::IncreasePartiBatchUpdateCheckCHV(vector<int> p, map<int,vector<pair<pair<int,int>,pair<int,int>>>>& wBatch, vector<pair<pair<int,int>,pair<int,int>>>& overlayBatch, bool ifOpt, vector<vector<pair<pair<int,int>,int>>>& updatedSCs){
+    for(int i=0;i<p.size();++i){
+        int pid=p[i];
+        IncreasePartiBatchUpdateCheckCH(pid, wBatch[pid], overlayBatch, false, updatedSCs[pid] );
+    }
+}
+
 //bottom-up shortcut update for post-boundary partition index
 void Graph::IncreasePartiBatchUpdateCheckPostMHL(map<int, vector<pair<pair<int, int>, pair<int, int>>>> &partiBatch, vector<pair<pair<int, int>, pair<int, int>>> &overlayBatch, bool ifParallel) {
     //partition batch Increase update
@@ -6468,14 +7446,31 @@ void Graph::IncreasePartiBatchUpdateCheckPostMHL(map<int, vector<pair<pair<int, 
         if(!partiBatch.empty()){
             if(partiBatch.size()>threadnum){
                 cout<<"partiBatch is larger than thread number! "<<partiBatch.size()<<" "<<threadnum<< endl;
+                vector<vector<int>> processID;
+                processID.assign(threadnum, vector<int>());
+                vector<int> vertices;
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+                    vertices.emplace_back(pid);
+                }
+                ThreadDistribute(vertices, processID);
+                boost::thread_group thread;
+                for(auto j=0;j<processID.size();++j){
+                    thread.add_thread(new boost::thread(&Graph::IncreasePartiBatchPostMHLShortcutV, this, processID[j], boost::ref(partiBatch), boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(updatedSCs), boost::ref(PropagateOverlay) ));
+                }
+                thread.join_all();
+
             }
+            else{
 //            cout<<"Update Partition number: "<<partiBatch.size()<<endl;
-            boost::thread_group thread;
-            for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
-                int pid=it->first;
-                thread.add_thread(new boost::thread(&Graph::IncreasePartiBatchPostMHLShortcut, this, pid, boost::ref(it->second), boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(updatedSCs[pid]), boost::ref(PropagateOverlay) ));
+                boost::thread_group thread;
+                for(auto it=partiBatch.begin();it!=partiBatch.end();++it){
+                    int pid=it->first;
+                    thread.add_thread(new boost::thread(&Graph::IncreasePartiBatchPostMHLShortcut, this, pid, boost::ref(it->second), boost::ref(Tree), boost::ref(rank), heightMax, boost::ref(updatedSCs[pid]), boost::ref(PropagateOverlay) ));
+                }
+                thread.join_all();
             }
-            thread.join_all();
+
         }
     }else{
         cout<<"Single thread computation."<<endl;

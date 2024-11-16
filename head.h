@@ -26,7 +26,7 @@
 #include <string>
 #include "Heap.h"
 //#include "labeling.hpp"
-#include <omp.h>
+//#include <omp.h>
 
 #define INF 99999999
 #define Dijk 0
@@ -36,7 +36,9 @@
 #define PH2H_Cross 4
 #define CH 1
 #define H2H 4
-
+#define MICROSEC_PER_SEC 1000000
+#define MILLISEC_PER_SEC 1000
+#define Resolution 10000000
 
 //typedef unsigned int vertex;
 typedef int vertex;
@@ -192,6 +194,23 @@ struct Node{//tree node
 	}
 };
 
+
+struct simulate_times{
+    std::vector<std::vector<int> > query_times;
+    std::vector<int> update_times;
+    int mode=2; //1: query_first 2: update_first
+};
+
+/// Throughput related function and data structure
+struct query{
+    double init_time=0; // in seconds, time of arrival
+    double process_time=0;  // in seconds, query processing time
+    query(double initT, double processT) {
+        init_time = initT;
+        process_time = processT;//query processing time
+    }
+};
+
 class Graph{
 public:
     string sourcePath;// the source path
@@ -318,6 +337,13 @@ public:
         Tree.clear();
         vSm.clear();
     }
+    /// For system throughput simulation
+    pair<double,double> ThroughputEstimate(vector<vector<double>> &query_costs, vector<vector<double>> &update_costs, double threshold_time, double T);
+    double analytical_update_first(double T_q, double T_u, double T_r, double T, double V_q);
+    double ThroughputSimulate(vector<vector<double>> & query_costs, vector<vector<double>>& update_costs, int simulation_time, double threshold_time, double period_time, double queryTime, int workerNum);
+    pair<double, double> simulator_UpdateFirst(vector<vector<double>> & query_costs, vector<vector<double>> & update_costs, vector<query> &queryList, int T, double period_time);
+    pair<double, double> simulator_UpdateFirst(vector<vector<double>> & query_costs, vector<vector<double>> & update_costs, vector<query> &queryList, int T, double period_time, int workerNum);
+    pair<double,int> getFastestWorker(vector<double>& workers);
 
     /// For non-partition SP index
     void HybridSPIndexConstruct();
@@ -384,8 +410,8 @@ public:
     void ConstructExtensionLabelPartiV(vector<int>& p, bool ifAllPair);
     void ConstructExtensionLabelParti(int pid);
     void ConstructExtensionLabelPartiNoAllPair(int pid);
-    void RefreshExtensionLabelsNoAllPair(map<int, vector<pair<pair<int, int>, pair<int, int>>>> & partiBatch);
-    void RefreshExtensionLabelsPostMHL(bool ifParallel, bool ifIncrease, double & runT);
+    void RefreshExtensionLabelsNoAllPair(map<int, vector<pair<pair<int, int>, pair<int, int>>>> & partiBatch, bool ifParallel);
+    void RefreshExtensionLabelsPostMHL(bool ifParallel, bool ifIncrease, double & runT, int threadNum);
     void RefreshExtensionLabels(map<int, vector<pair<pair<int, int>, pair<int, int>>>> & partiBatch);
     void RefreshExtensionLabelPartiV(vector<int>& p, bool ifTopDown);
     void RefreshExtensionLabelParti(int pid);
@@ -537,13 +563,15 @@ public:
 
     void EffiCheck(string filename,int runtimes);
     void EffiCheckStages(vector<pair<int,int>> & ODpair, int runtimes, int intervalT, unsigned long long & throughputNum, vector<double>& stageUpdateT, vector<double>& stageQueryT);
+    vector<double> StageDurationCompute(int intervalT);
     void GetBatchThroughput(vector<double> & queryTimes, int intervalT, unsigned long long & throughputNum, vector<double>& stageUpdateT);
     void EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<double> & queryTimes);
+    void EffiStageCheck(vector<pair<int,int>> & ODpair, int runtimes, vector<vector<double>> & queryTimes);
     void StagePerformanceShow(int batchNum, vector<double>& stageUpdateT, vector<double>& stageQueryT);
     void AverageStagePerformance(int batchNum, vector<double>& stageUpdateT, vector<double>& stageQueryT);
-    double EffiMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType);
-    double EffiPMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType);
-    double EffiPostMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType);
+    double EffiMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType, vector<double> &qTime);
+    double EffiPMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType, vector<double> &qTime);
+    double EffiPostMHLStage(vector<pair<int,int>> & ODpair, int runtimes, int queryType, vector<double> &qTime);
     int QueryPostMHL(int ID1, int ID2);
     int QueryPostMHLDebug(int ID1, int ID2);
     int QueryPMHLOpt(int ID1, int ID2);//algoQuery: 0: Dijkstra; 1: PCH-No; 4: PH2H-Post; 5: PH2H-Extend
@@ -575,6 +603,7 @@ public:
     //// For throughput test
     void RealUpdateThroughputTest(string updateFile);
     void RandomUpdateThroughputTest(string updateFile, int batchNum, int batchSize, int batchInterval);
+    void RandomUpdateThroughputTestQueueModel(int batchNum, int batchSize, int batchInterval, double T_r, int workerNum);
     void SPThroughputTest(int updateType, bool ifBatch, int batchNum, int batchSize, int batchInterval, int runtimes);
     void DecBatchThroughput(vector<pair<pair<int,int>,pair<int,int>>>& wBatch, int batch_i, double& runT1);//process batch update
     void IncBatchThroughput(vector<pair<pair<int,int>,pair<int,int>>>& wBatch, int batch_i, double& runT1);//process batch update
@@ -619,12 +648,15 @@ public:
     void DecreaseOverlayBatchLabel(vector<Node> &Tree, vector<int> &rank, int heightMax, vector<int>& ProBeginVertexSet,set<int>& vertexIDChL);
     void DecreasePartiBatchUpdateCheck(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<pair<pair<int,int>,pair<int,int>>>& weightOverlay);
     void DecreasePartiBatchUpdateCheckCH(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<pair<pair<int,int>,pair<int,int>>>& weightOverlay, bool ifOpt, vector<pair<pair<int,int>,int>>& updatedSC);
+    void DecreasePartiBatchUpdateCheckCHV(vector<int> p, map<int,vector<pair<pair<int,int>,pair<int,int>>>>& wBatch, vector<pair<pair<int,int>,pair<int,int>>>& weightOverlay, bool ifOpt, vector<vector<pair<pair<int,int>,int>>>& updatedSC);
     void DecreasePartiBatchUpdateCheckPostMHL(map<int, vector<pair<pair<int, int>, pair<int, int>>>>& partiBatch, vector<pair<pair<int,int>,pair<int,int>>>& overlayBatch, bool ifParallel);
     void DecreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<vector<pair<int,int>>> &Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax, vector<pair<pair<int,int>,int>>& updatedSC, bool ifLabelU);
     void DecreasePartiBatchForOpt(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<vector<pair<int,int>>> &Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax, vector<pair<pair<int,int>,int>>& updatedSC, bool ifLabelU, bool ifConstruct);
     void DecreasePartiBatchPostMHLShortcut(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch,  vector<Node> &Tree, vector<int> &rank, int heightMax, vector<pair<pair<int,int>,int>>& updatedSC);
-    void DecreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<unordered_map<int,int>>& Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax, bool ifLabelU);
+    void DecreasePartiBatchPostMHLShortcutV(vector<int> p, map<int,vector<pair<pair<int,int>,pair<int,int>>>>& wBatch, vector<Node> &Tree, vector<int> &rank, int heightMax, vector<vector<pair<pair<int,int>,int>>>& updatedSCs);
+    void DecreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<unordered_map<int,int>>& Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax, bool ifLabelU, bool ifPost);
     void DecreasePartiBatchLabel(vector<Node> &Tree, vector<int> &rank, int heightMax, vector<int>& ProBeginVertexSet,set<int>& vertexIDChL);
+    void DecreasePartiBatchLabelV(vector<int> p, vector<vector<Node>> &Trees, vector<vector<int>> &ranks, vector<int> &heightMaxs, vector<vector<int>> &ProBeginVertexSets, vector<set<int>>& vertexIDChLs);
     void IncreaseOverlayBatch(vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<unordered_map<int,int>> &Neighbor, vector<Node> &Tree, vector<int> &rank, int heightMax,vector<map<int, vector<pair<int,int>>>> &SCconNodesMT, vector<vector<int>> &VidtoTNid, bool ifLabelU);
     void IncreaseH2HBatch(vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<vector<pair<int,int>>> &Neighbor, vector<Node> &Tree, vector<int> &rank, int heightMax,vector<map<int, vector<pair<int,int>>>> &SCconNodesMT, vector<vector<int>> &VidtoTNid, bool ifLabelU);
     void IncreaseOverlayBatchPostMHL(vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<Node> &Tree, vector<int> &rank, int heightMax,vector<map<int, vector<pair<int,int>>>> &SCconNodesMT, vector<vector<int>> &VidtoTNid, bool ifLabelU);
@@ -632,12 +664,15 @@ public:
     void IncreaseOverlayBatchLabel(vector<Node> &Tree, vector<int> &rank, int heightMax, vector<int>& ProBeginVertexSet, vector<vector<int>> &VidtoTNid);
     void IncreasePartiBatchUpdateCheck(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<pair<pair<int,int>,pair<int,int>>>& weightOverlay);
     void IncreasePartiBatchUpdateCheckCH(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<pair<pair<int,int>,pair<int,int>>>& weightOverlay, bool ifOpt,vector<pair<pair<int,int>,int>>& updatedSC);
+    void IncreasePartiBatchUpdateCheckCHV(vector<int> p, map<int,vector<pair<pair<int,int>,pair<int,int>>>>& wBatch, vector<pair<pair<int,int>,pair<int,int>>>& overlayBatch, bool ifOpt, vector<vector<pair<pair<int,int>,int>>>& updatedSCs);
     void IncreasePartiBatchUpdateCheckPostMHL(map<int, vector<pair<pair<int, int>, pair<int, int>>>>& partiBatch, vector<pair<pair<int, int>, pair<int, int>>> &overlayBatch, bool ifParallel);
     void IncreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<vector<pair<int,int>>> &Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax,vector<map<int, vector<pair<int,int>>>> &SCconNodesMT, vector<vector<int>> &VidtoTNid, vector<pair<pair<int,int>,int>>& updatedSC, bool ifLabelU);
     void IncreasePartiBatchForOpt(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<vector<pair<int,int>>> &Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax,vector<map<int, vector<pair<int,int>>>> &SCconNodesMT, vector<vector<int>> &VidtoTNid, vector<pair<pair<int,int>,int>>& updatedSC, bool ifLabelU);
     void IncreasePartiBatchPostMHLShortcut(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch,  vector<Node> &Tree, vector<int> &rank, int heightMax, vector<pair<pair<int,int>,int>>& updatedSC, vector<int>& PropagateOverlay);
-    void IncreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<unordered_map<int,int>> &Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax,vector<map<int, vector<pair<int,int>>>> &SCconNodesMT, vector<vector<int>> &VidtoTNid, bool ifLabelU);
+    void IncreasePartiBatchPostMHLShortcutV(vector<int> p, map<int, vector<pair<pair<int, int>, pair<int, int>>>> &wBatch, vector<Node> &Tree, vector<int> &rank, int heightMax, vector<vector<pair<pair<int, int>, int>>> &updatedSCs, vector<int>& PropagateOverlay );
+    void IncreasePartiBatch(int pid, vector<pair<pair<int,int>,pair<int,int>>>& wBatch, vector<unordered_map<int,int>> &Neighbors, vector<Node> &Tree, vector<int> &rank, int heightMax,vector<map<int, vector<pair<int,int>>>> &SCconNodesMT, vector<vector<int>> &VidtoTNid, bool ifLabelU, bool ifPost);
     void IncreasePartiBatchLabel(vector<Node> &Tree, vector<int> &rank, int heightMax, vector<int>& ProBeginVertexSet, vector<vector<int>> &VidtoTNid);
+    void IncreasePartiBatchLabelV(vector<int> p, vector<vector<Node>> &Trees, vector<vector<int>> &ranks, vector<int> &heightMaxs,  vector<vector<int>> &ProBeginVertexSet, vector<vector<int>> &VidtoTNid);
     void IncreasePartiBatchLabelPostMHLExtendV(vector<int>& p, vector<Node> &Tree, vector<int> &rank, int heightMax, vector<vector<int>>& ProBeginVertexSetV, vector<vector<int>> &VidtoTNid);
     void IncreasePartiBatchLabelPostMHLExtend(int pid, vector<Node> &Tree, vector<int> &rank, int heightMax, vector<int>& ProBeginVertexSet, vector<vector<int>> &VidtoTNid);
 
@@ -670,6 +705,68 @@ public:
     vector<int> DFS_CC(vector<map<int,int>> & Edges, set<int> set_A, set<int> & set_B, int nodenum);
     vector<int> DFS_CC(vector<vector<pair<int,int>>> & Edges, set<int> set_A, set<int> & set_B, int nodenum);
 
+
+    float nextTime(double rateParameter) {
+        return -log(1.0f - (double) rand() / (RAND_MAX + 1.0)) / rateParameter;
+    }
+/// poisson process
+    std::vector<double> poisson(double lambda, int T) {// T: seconds
+        std::vector<double> sequence;
+        double t=0;
+//    srand(time(NULL));
+        int num=0;
+        while(t < T) {
+            double element = nextTime(lambda);
+            if(t+element < T) {
+                sequence.push_back(t + element);
+                //cout<< t+element<<endl;
+            }
+            t+=element;
+            num++;
+        }
+        return sequence;
+    }
+/// function of generating the queries within the duration of T, fulfilling the poisson distribution
+    std::vector<query> generate_queryList(double lambda, int T) {
+        std::vector<query> list;
+        std::vector<double> sequence = poisson(lambda, T);
+//        std::cout<<"sequence size of poisson process: "<<sequence.size()<<" ; lambda: "<<lambda<<" ; T: "<<T<<std::endl;
+//    std::cout<<"process_time_list size: "<<process_time_list.size()<<std::endl;
+//    int m = process_time_list.size();
+        int n = sequence.size();
+        for(int i=0; i < n; i++) {
+            int id = rand()%n;
+//        query query(sequence[i], process_time_list[i%m]);
+//        list.push_back(query);
+            list.emplace_back(sequence[i],0);
+//            if(i<2 || i>n-2){
+//                std::cout<<i<<": "<<id<<" "<<sequence[i]<<" s"<<std::endl;
+//            }
+        }
+        return list;
+    }
+
+    double get_mean(vector<double>& times) {
+        double mean = 0.0;
+        for (auto val : times) {
+            mean += val;
+        }
+        if(times.size()>0)
+            return mean / times.size();
+        else
+            return 0.0;
+    }
+    double get_var(vector<double>& times) {
+        double mean = get_mean(times);
+        double var = 0.0;
+        for (auto val : times) {
+            var += (val - mean) * (val - mean);
+        }
+        if(times.size()>0)
+            return var / times.size();
+        else
+            return 0.0;
+    }
 };
 
 #endif // HEAD_H_
