@@ -1,5 +1,5 @@
 # HTSP
-The implementation code of paper "High Throughput Shortest Distance Query Processing for Large Dynamic Road Networks" (submitted to ICDE25). Please refer to the paper for the algorithm details. 
+The implementation code of paper "High Throughput Shortest Distance Query Processing for Large Dynamic Road Networks" (ICDE25). Please refer to the paper for the algorithm details. 
 
 
 ## Algorithms
